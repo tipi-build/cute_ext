@@ -52,27 +52,26 @@ int main(int argc, char *argv[]){
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s1_1"));
 
     cute::suite s2{};
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "1");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "2");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "3");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "4");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "5");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "6");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "7");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "8");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "9");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "10");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "11");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "12");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "13");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "14");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, failingtest, "15");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "16");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "17");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "18");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "19");
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "20");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s2_0");
+    
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_0");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_1");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_2");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_3");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_4");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_5");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_6");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_7");
 
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_0");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_1");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_2");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_3");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_4");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_5");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_6");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_7");
+    
     wrapper.register_suite(s1, "Suite 1");
     wrapper.register_suite(s2, "Suite 2");
 
