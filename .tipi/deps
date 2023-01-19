@@ -8,10 +8,14 @@
     },
     "eidheim/tiny-process-library": {
         "@": ":5bc47531a97f80ac07092ac3ed56a26139c748b3",
+        "x:windows": ["test/", "example.cpp", "process_unix.cpp"],
         "x:windows-cxx17": ["test/", "example.cpp", "process_unix.cpp"],
         "x:vs-16-2019-win64-cxx17": ["test/", "example.cpp", "process_unix.cpp"],
+        "x:linux": ["test/", "example.cpp", "process_win.cpp"],
         "x:linux-cxx17": ["test/", "example.cpp", "process_win.cpp"],
-        "x:macos-cxx17": ["test/", "example.cpp", "process_win.cpp"]
+        "x:macos": ["test/", "example.cpp", "process_win.cpp"],
+        "x:macos-cxx17": ["test/", "example.cpp", "process_win.cpp"],
+        "x:clang-cxx17": ["test/", "example.cpp", "process_win.cpp"]
     },
     "ikalnytskyi/termcolor": {
         "@": "v2.1.0"
