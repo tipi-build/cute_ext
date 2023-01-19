@@ -455,7 +455,7 @@ namespace tipi::cute_ext {
       all_suites_.insert({ info, suite });
     }
 
-    template <typename Listener=null_listener>
+    template <typename Listener=cute::null_listener>
     bool run_templated(Listener & listener, const std::map<std::string, const cute::suite&> &suites) {
 
       const auto filter_test_suite_arg = args_.get<std::string>("filter-suite", "");

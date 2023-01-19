@@ -72,7 +72,7 @@ namespace tipi::cute_ext
 
     void begin(cute::suite const &suite, char const *info, size_t n_of_tests)
     {
-      suite_start_times.insert({ &suite, std::chrono::high_resolution_clock::now() });
+      suite_start_times.insert({ &suite, std::chrono::steady_clock::now() });
 
       suite_failures.exchange(0);
       suite_success.exchange(0);
@@ -85,7 +85,7 @@ namespace tipi::cute_ext
 
     void end(cute::suite const &suite, char const *info)
     {
-      auto suite_finished_ts = std::chrono::high_resolution_clock::now();
+      auto suite_finished_ts = std::chrono::steady_clock::now();
 
       out << "\n"
           << "  | Suite   " << ((suite_failures == 0) ? "🟢 PASS" : "🟥 FAILED");
@@ -122,14 +122,14 @@ namespace tipi::cute_ext
 
     void start(cute::test const &test)
     {
-      test_start_times.insert({ &test, std::chrono::high_resolution_clock::now() });
+      test_start_times.insert({ &test, std::chrono::steady_clock::now() });
       out << " 🧪 " << padRight(test.name(), 40, ' ');      
       Listener::start(test);
     }
 
     void success(cute::test const &test, char const *msg)
     {
-      auto test_finished_ts = std::chrono::high_resolution_clock::now();
+      auto test_finished_ts = std::chrono::steady_clock::now();
       suite_success++;
 
       out << termcolor::bold << "🟢 PASS";
@@ -147,7 +147,7 @@ namespace tipi::cute_ext
     }
     void failure(cute::test const &test, cute::test_failure const &e)
     {
-      auto test_finished_ts = std::chrono::high_resolution_clock::now();
+      auto test_finished_ts = std::chrono::steady_clock::now();
       suite_failures++;
 
       failed_tests.push_back(test.name());
@@ -174,7 +174,7 @@ namespace tipi::cute_ext
     }
     void error(cute::test const &test, char const *what)
     {
-      auto test_finished_ts = std::chrono::high_resolution_clock::now();
+      auto test_finished_ts = std::chrono::steady_clock::now();
       suite_failures++;
       out << termcolor::bold <<  "🟥 FAILED" << termcolor::reset;
 
