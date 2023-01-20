@@ -19,5 +19,13 @@
     },
     "ikalnytskyi/termcolor": {
         "@": "v2.1.0"
-    }
+    },
+
+    "platform:linux-cxx17" : [ 
+        "target:::libc++abi.a" 
+    ],
+
+    "platform:linux" : [ 
+        "target:::libc++abi.a" 
+    ]
 }
