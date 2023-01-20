@@ -20,8 +20,13 @@ namespace tipi::cute_ext
     const std::string SEPARATOR_THICK = "===============================================================================\n";    
     const std::string SEPARATOR_THIN  = "-------------------------------------------------------------------------------\n";
 
+    std::atomic<size_t> total_suites_failed = 0;
+    std::atomic<size_t> total_suites_passed = 0;
+
+
     std::atomic<size_t> suite_expected = 0;
     std::atomic<size_t> suite_failures = 0;
+    std::atomic<size_t> suite_errors = 0;
     std::atomic<size_t> suite_success = 0;
 
     std::map<const cute::suite*, std::chrono::steady_clock::time_point> suite_start_times{};
@@ -50,10 +55,16 @@ namespace tipi::cute_ext
       out << "\n"
           << "Test stats: \n"
           << " - suites executed:     " << suite_start_times.size() << "\n"
-          << " - test cases executed: " << test_start_times.size() << "\n"
+          << " - suites passed:       " << total_suites_passed << "\n";
+
+      if(total_suites_failed > 0) { out << termcolor::red; }
+      out << " - suites failed:       " << total_suites_failed << "\n";
+      if(total_suites_failed > 0) { out << termcolor::reset; }
+
+      out << " - test cases executed: " << test_start_times.size() << "\n"
           << " - total duration:      " << total_time.count() << "s\n" 
           << "\n"
-          << "Result " << ((suite_failures == 0) ? "🟢 PASS" : "🟥 FAILED")
+          << "Result " << ((total_suites_failed == 0) ? "🟢 PASS" : "🟥 FAILED")
           << "\n"
           << std::endl;
     }
@@ -73,6 +84,7 @@ namespace tipi::cute_ext
 
       suite_failures.exchange(0);
       suite_success.exchange(0);
+      suite_errors.exchange(0);
       suite_expected.exchange(n_of_tests);
 
       out << termcolor::bold << "🧫 Test suite: " << info << " (" << n_of_tests << " tests)" << termcolor::bold << "\n\n"; 
@@ -84,8 +96,18 @@ namespace tipi::cute_ext
     {
       auto suite_finished_ts = std::chrono::steady_clock::now();
 
-      out << "\n"
-          << "  | Suite   " << ((suite_failures == 0) ? "🟢 PASS" : "🟥 FAILED");
+      if(suite_failures + suite_errors == 0) {
+        total_suites_passed++;
+
+        out << "\n"
+          << "  | Suite     🟢 PASS";
+
+      }
+      else {
+        total_suites_failed++;
+        out << "\n"
+          << "  | Suite     🟥 FAILED";
+      }
 
       /* calulate how long the suite took */
       if(suite_start_times.find(&suite) != suite_start_times.end()) {
@@ -95,22 +117,23 @@ namespace tipi::cute_ext
 
       out << "\n";
 
-      out << "  | Tests   " << suite_expected  << "\n";
+      out << "  | Tests     " << suite_expected  << "\n";
 
       out << "  | ";
-      if(suite_success == suite_expected) { out << termcolor::green; } else { out << termcolor::reset; }
-      out << "Pass    " << suite_success << "\n";
+      if(suite_success == suite_expected) { out << termcolor::green; }
+      out << "Pass      " << suite_success << "\n";
+      if(suite_success == suite_expected) { out << termcolor::reset; } 
 
       if(suite_failures > 0) { 
-        out << "  | " << termcolor::red << "Failed  " << suite_failures 
-            << termcolor::reset << "\n"; 
-        
-      } else { 
-        out << termcolor::reset;
-      }      
+        out << "  | " << termcolor::red << "Failed    " << suite_failures << termcolor::reset << "\n";         
+      }
 
-      if((suite_expected - suite_failures - suite_success) > 0) {
-        out << "  | " << termcolor::yellow << "Skipped " << std::to_string(suite_expected - suite_failures - suite_success) << termcolor::reset << "\n";
+      if(suite_errors > 0) { 
+        out << "  | " << termcolor::red << "Errored   " << suite_errors << termcolor::reset << "\n";         
+      }
+
+      if((suite_expected - suite_failures - suite_errors - suite_success) > 0) {
+        out << "  | " << termcolor::yellow << "Skipped   " << std::to_string(suite_expected - suite_failures - suite_errors - suite_success) << termcolor::reset << "\n";
       }
         
       out << std::endl;
@@ -172,8 +195,8 @@ namespace tipi::cute_ext
     void error(cute::test const &test, char const *what)
     {
       auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_failures++;
-      out << termcolor::bold <<  "🟥 FAILED" << termcolor::reset;
+      suite_errors++;
+      out << termcolor::bold <<  "🟥 ERROR" << termcolor::reset;
 
       /* calulate how long the cast took */
       if(test_start_times.find(&test) != test_start_times.end()) {

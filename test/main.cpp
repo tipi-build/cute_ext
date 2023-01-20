@@ -15,6 +15,8 @@
 
 using namespace std::chrono_literals;
 
+extern cute::suite make_suite();
+
 class OutTests {
 
 public:
@@ -96,6 +98,7 @@ int main(int argc, char *argv[]){
     wrapper.register_suite(s2, "Suite 2");
     wrapper.register_suite(s3, "Suite 3");
     wrapper.register_suite(make_suite_ReadOnlyIniFileTest(), "Temp suite");
+    wrapper.register_suite(make_suite(), "External suite");
 
     try {
         wrapper.process_cmd();

@@ -492,8 +492,11 @@ namespace tipi::cute_ext {
       }
     }
     
+    void register_suite(const cute::suite& suite, const std::string& info) {
+      all_suites_.insert({ info, suite });
+    }
 
-    void register_suite(cute::suite suite, const std::string& info) {
+    void register_suite(const cute::suite&& suite, const std::string& info) {
       all_suites_.insert({ info, suite });
     }
 
