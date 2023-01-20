@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <thread>
 #include <future>
+#include <optional>
 
 #include <cute/cute.h>
 
@@ -30,16 +31,42 @@
 namespace tipi::cute_ext {
   using namespace std::string_literals;
 
+  namespace detail {
+    cute::null_listener dummy_null_listener{};
+
+  }
+
+  template <typename User_Supplied_Listener=cute::null_listener>
   class wrapper {
   private:
-    std::map<std::string, cute::suite> all_suites_{};
+
+    bool opt_auto_concurrent_run = true;
+    bool opt_run_explicit = false;
+    bool opt_show_help = false;
+    bool opt_list_testcases = false;
+    bool opt_skipped_as_pass = false;
+    bool opt_exit_on_destruction = true;
+
+    std::string opt_filter_suite_value{};
+    std::string opt_filter_unit_value{};
+
+    size_t opt_maniac_strands_arg;
+
+
+    /***/
+    std::unordered_map<std::string, cute::suite> all_suites_{};
     flags::args args_;
     std::string program_exe_path;
 
     std::shared_ptr<std::fstream> file_out_ptr_;
     std::ostream* out_stream_ = &std::cout;
 
-  private:
+    User_Supplied_Listener &user_defined_listener_;
+    bool use_user_defined_listener_;
+
+
+    std::atomic<size_t> test_exec_failures = 0;
+
     std::function<bool(const std::string&)> make_filter_fn(const std::string& pattern) {
       
       auto filter = [pattern](const std::string &name) {
@@ -110,8 +137,7 @@ namespace tipi::cute_ext {
     }
 
     bool cmd_maniac_mode_stdin_runner() {
-      auto filter_suite_enabled = make_filter_fn(args_.get<std::string>("filter-suite", ""));
-      
+      auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);      
       
       std::string listing_raw{};
       std::getline(std::cin, listing_raw);
@@ -133,7 +159,7 @@ namespace tipi::cute_ext {
         }
       }
 
-      auto msmap = std::map<std::string, cute::suite>{
+      auto msmap = std::unordered_map<std::string, cute::suite>{
         { "maniac suite", msuite }
       };
 
@@ -151,12 +177,11 @@ namespace tipi::cute_ext {
     }
 
     bool cmd_maniac() {
-      auto filter_suite_enabled = make_filter_fn(args_.get<std::string>("filter-suite", ""));
-      auto filter_unit_enabled = make_filter_fn(args_.get<std::string>("filter", ""));
+      auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
+      auto filter_unit_enabled = make_filter_fn(opt_filter_unit_value);
 
       // how many strands do we want
-      const auto maniac_strands_arg = args_.get<size_t>("j", std::thread::hardware_concurrency() + 1);
-      size_t maniac_strands = maniac_strands_arg;
+      size_t maniac_strands = opt_maniac_strands_arg;
 
       // subdivide all the existing suites into new ones (like a maniac)
       std::vector<cute::suite> maniac_suites{maniac_strands};
@@ -198,7 +223,7 @@ namespace tipi::cute_ext {
 
           try {               
             auto msuite = maniac_suites.at(ix); 
-            auto msmap = std::map<std::string, cute::suite>{
+            auto msmap = std::unordered_map<std::string, cute::suite>{
               { "maniac suite "s + std::to_string(ix), msuite }
             };
 
@@ -415,9 +440,29 @@ namespace tipi::cute_ext {
       return *out_stream_;
     }
 
-    wrapper(int argc, char *argv[]) 
-      : args_(argc, argv)
+    wrapper(int argc, char *argv[], bool exit_on_destruction = true)
+      : wrapper(argc, argv, detail::dummy_null_listener, exit_on_destruction)
     {
+      use_user_defined_listener_ = false;
+    }
+
+    wrapper(int argc, char *argv[], User_Supplied_Listener& user_defined_listener, bool exit_on_destruction = true)
+      : args_(argc, argv)
+      , use_user_defined_listener_(true)
+      , user_defined_listener_(user_defined_listener)
+      , opt_exit_on_destruction(exit_on_destruction)
+    {
+      program_exe_path = std::string(argv[0]);
+
+      opt_filter_unit_value   = args_.get<std::string>("filter", "");
+      opt_filter_suite_value  = args_.get<std::string>("filter-suite", "");
+      opt_maniac_strands_arg  = args_.get<size_t>("j", std::thread::hardware_concurrency() + 1);
+
+      opt_auto_concurrent_run = args_.get<bool>("parallel", false);
+      opt_list_testcases      = args_.get<bool>("list-testcases") || args_.get<bool>("ltc");
+      opt_show_help           = args_.get<bool>("help", false) || args_.get<bool>("h", false) || args_.get<bool>("?", false);
+      opt_skipped_as_pass     = args_.get<bool>("skipped-as-pass", false);
+
       const auto out_arg = args_.get<std::string>("output", "cout");
       
       if(out_arg == "cout" || out_arg == "console") {
@@ -440,36 +485,53 @@ namespace tipi::cute_ext {
         out_stream_ = fs;
       }
 
-      program_exe_path = std::string(argv[0]);
+
     }
 
     ~wrapper() {
+
+      // list here
+      if(opt_list_testcases) {
+        print_all_tests();
+      }
+
+      if(opt_auto_concurrent_run) {
+        process_cmd();
+      }
+
       if(file_out_ptr_ && file_out_ptr_->is_open()) {
         get_output() << std::flush; 
         file_out_ptr_->close();
-      } 
-    }
+      }
+      
+      if(opt_exit_on_destruction) {
+        std::cout << "EXIT() " << test_exec_failures << std::endl;
 
-    void process_cmd() {
+        if(test_exec_failures > 0) {
+          std::exit(1);
+        }
 
-      const auto show_help = args_.get<bool>("help", false) || args_.get<bool>("h", false) || args_.get<bool>("?", false);
-
-      if(show_help) {
-        print_help();
         std::exit(0);
       }
+    }
 
-      const auto list_testcases = args_.get<bool>("list-testcases") || args_.get<bool>("ltc");
-      if(list_testcases) {
-        print_all_tests();
+    size_t get_failure_count() {
+      return test_exec_failures;
+    }
+
+    bool process_cmd() {      
+
+      if(opt_show_help) {
+        print_help();
+        std::exit(0);
       }
 
       const auto explicit_run = args_.get<bool>("run");
 
       // run the suite automatically if no additional params are provided OR and explicit --run is present
-      if(explicit_run || (!explicit_run && !list_testcases) ) {
+      if(explicit_run || (!explicit_run && !opt_list_testcases) ) {
 
-        auto filter_suite_enabled = make_filter_fn(args_.get<std::string>("filter-suite", ""));
+        auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
 
         /**
          * @brief This one is the case in which we are running as maniac-mode child process
@@ -478,42 +540,58 @@ namespace tipi::cute_ext {
         const auto maniac_test_list_stdin = args_.get<bool>("maniac-list-stdin");
         if (maniac_test_list_stdin) {
           bool success = cmd_maniac_mode_stdin_runner();
-          std::exit((success) ? 0 : 1);
+
+          if(!success) {
+            test_exec_failures++;
+          } 
+
+          return success;
         }
 
-        const auto maniac_enabled = args_.get<bool>("maniac");        
-        if(maniac_enabled) {
+        if(opt_auto_concurrent_run) {
           bool success = cmd_maniac();
-          std::exit((success) ? 0 : 1);          
+
+          if(!success) {
+            test_exec_failures++;
+          }
         }      
       
-        bool success = cmd_run_base();        
-        std::exit((success) ? 0 : 1);
+        bool success = cmd_run_base();
+        if(!success) {
+          test_exec_failures++;
+        }
+
+        return success;
       }
     }
     
     void register_suite(const cute::suite& suite, const std::string& info) {
-      all_suites_.insert({ info, suite });
+      if(opt_auto_concurrent_run || (opt_list_testcases && !opt_run_explicit)) {
+        all_suites_.insert({ info, suite });
+      }
+      else {
+        all_suites_ = std::unordered_map<std::string, cute::suite>{
+          { info, suite }
+        };
+
+        process_cmd();
+      }     
     }
 
     void register_suite(const cute::suite&& suite, const std::string& info) {
-      all_suites_.insert({ info, suite });
+        register_suite(suite, info);
     }
 
     template <typename Listener=cute::null_listener>
-    bool run_templated(Listener & listener, const std::map<std::string, cute::suite> &suites) {
+    bool run_templated(Listener & listener, const std::unordered_map<std::string, cute::suite> &suites) {
 
-      const auto filter_test_suite_arg = args_.get<std::string>("filter-suite", "");
-      const auto filter_test_case_arg = args_.get<std::string>("filter", "");
-      const auto skipped_as_pass = args_.get<bool>("skipped-as-pass", false);      
-
-      auto filter_unit_enabled = make_filter_fn(filter_test_case_arg);
-      auto filter_suite_enabled = make_filter_fn(filter_test_suite_arg);
+      auto filter_unit_enabled = make_filter_fn(opt_filter_unit_value);
+      auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
 
       auto run_unit = [&](const cute::test& t) {
 
         if(filter_unit_enabled(t.name()) == false) {
-          if(skipped_as_pass) {
+          if(opt_skipped_as_pass) {
             listener.start(t);
             listener.success(t, "SKIPPED");
           }
@@ -557,7 +635,7 @@ namespace tipi::cute_ext {
         }
         else {
 
-          if(skipped_as_pass) {
+          if(opt_skipped_as_pass) {
             std::string skipped_suite_info = suite_name + " [SKIPPED]";
             listener.begin(suite, skipped_suite_info.c_str(), 0);
             listener.end(suite, skipped_suite_info.c_str());
@@ -568,14 +646,18 @@ namespace tipi::cute_ext {
       return result;
     }
 
-    bool run_suites(const std::map<std::string, cute::suite> &suites, std::ostream& output_stream) {
+    bool run_suites(const std::unordered_map<std::string, cute::suite> &suites, std::ostream& output_stream) {
       
       const auto listener_arg = args_.get<std::string>("listener", "modern");
       const auto is_maniac_mode = args_.get<bool>("maniac", false);
 
-      if(listener_arg == "ide") { 
+
+      if(use_user_defined_listener_) {
+        return run_templated<>(user_defined_listener_, suites);
+      }
+      else if(listener_arg == "ide") { 
         cute::ide_listener<> listener(output_stream); 
-        return run_templated<>(listener, suites);  // in maniac mode we don't want to open/close the test-suites root element
+        return run_templated<>(listener, suites);
       }
       else if(listener_arg == "classic") {
         cute::ostream_listener<> listener(output_stream);
@@ -657,7 +739,7 @@ namespace tipi::cute_ext {
       throw std::runtime_error("Unknown --listener option"); // should have thrown earlier, but anyways
     }
 
-    bool run_suites(const std::map<std::string, cute::suite> &suites) { 
+    bool run_suites(const std::unordered_map<std::string, cute::suite> &suites) { 
       return run_suites(suites, get_output());
     }
 

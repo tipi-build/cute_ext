@@ -58,7 +58,12 @@ using namespace std::string_literals;
 
 int main(int argc, char *argv[]){
     tipi::cute_ext::util::enable_vt100_support_windows10();
-	tipi::cute_ext::wrapper wrapper(argc, argv);
+    
+
+
+    cute::xml_file_opener xmlfile(argc, argv);
+    cute::xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};
+	tipi::cute_ext::wrapper wrapper(argc, argv, lis, false);
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
@@ -100,12 +105,18 @@ int main(int argc, char *argv[]){
     wrapper.register_suite(make_suite_ReadOnlyIniFileTest(), "Temp suite");
     wrapper.register_suite(make_suite(), "External suite");
 
-    try {
+    /*try {
         wrapper.process_cmd();
     }
     catch(const std::exception &ex) {
         std::cout << "Failed to run\n" << ex.what() << std::endl;
         return -1;
+    }*/
+
+  
+
+    if(wrapper.get_failure_count() > 0) {
+        return 1;
     }
     
     return 0;
