@@ -68,6 +68,7 @@ int main(int argc, char *argv[]){
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s1_1"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_1"));
 
     cute::suite s2{};
     s2 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s2_0");

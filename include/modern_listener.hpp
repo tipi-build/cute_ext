@@ -23,6 +23,8 @@ namespace tipi::cute_ext
     std::atomic<size_t> total_suites_failed = 0;
     std::atomic<size_t> total_suites_passed = 0;
 
+    bool print_summary = false;
+
 
     std::atomic<size_t> suite_expected = 0;
     std::atomic<size_t> suite_failures = 0;
@@ -36,37 +38,44 @@ namespace tipi::cute_ext
     std::vector<std::string> failed_tests{};
 
   public:
+    modern_listener(bool print_summary, std::ostream &os = std::cerr) 
+      : out(os)
+      , print_summary(print_summary)
+    {}
+
     modern_listener(std::ostream &os = std::cerr) : out(os)
     {}
 
     ~modern_listener() {
       using namespace std::chrono_literals;
 
-      auto total_time_ms = 0ms;
+      if(print_summary) {
+        auto total_time_ms = 0ms;
 
-      for(auto& v : test_case_durations) {
-        total_time_ms += v;
+        for(auto& v : test_case_durations) {
+          total_time_ms += v;
+        }
+
+        auto total_time = std::chrono::duration_cast<std::chrono::duration<double>>(total_time_ms);
+
+        // duration_s = total_time;
+
+        out << "\n"
+            << "Test stats: \n"
+            << " - suites executed:     " << suite_start_times.size() << "\n"
+            << " - suites passed:       " << total_suites_passed << "\n";
+
+        if(total_suites_failed > 0) { out << termcolor::red; }
+        out << " - suites failed:       " << total_suites_failed << "\n";
+        if(total_suites_failed > 0) { out << termcolor::reset; }
+
+        out << " - test cases executed: " << test_start_times.size() << "\n"
+            << " - total duration:      " << total_time.count() << "s\n" 
+            << "\n"
+            << "Result " << ((total_suites_failed == 0) ? "🟢 PASS" : "🟥 FAILED")
+            << "\n"
+            << std::endl;
       }
-
-      auto total_time = std::chrono::duration_cast<std::chrono::duration<double>>(total_time_ms);
-
-      // duration_s = total_time;
-
-      out << "\n"
-          << "Test stats: \n"
-          << " - suites executed:     " << suite_start_times.size() << "\n"
-          << " - suites passed:       " << total_suites_passed << "\n";
-
-      if(total_suites_failed > 0) { out << termcolor::red; }
-      out << " - suites failed:       " << total_suites_failed << "\n";
-      if(total_suites_failed > 0) { out << termcolor::reset; }
-
-      out << " - test cases executed: " << test_start_times.size() << "\n"
-          << " - total duration:      " << total_time.count() << "s\n" 
-          << "\n"
-          << "Result " << ((total_suites_failed == 0) ? "🟢 PASS" : "🟥 FAILED")
-          << "\n"
-          << std::endl;
     }
 
     std::string padRight(std::string str, const size_t num, const char paddingChar = ' ') 
