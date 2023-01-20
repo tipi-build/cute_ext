@@ -16,7 +16,6 @@ namespace tipi::cute_ext
   struct modern_listener : Listener
   {
     std::ostream &out;
-    bool detailed;
 
     const std::string SEPARATOR_THICK = "===============================================================================\n";    
     const std::string SEPARATOR_THIN  = "-------------------------------------------------------------------------------\n";
@@ -32,9 +31,7 @@ namespace tipi::cute_ext
     std::vector<std::string> failed_tests{};
 
   public:
-    modern_listener(std::ostream &os = std::cerr, bool detailed = false)
-      : out(os)
-      , detailed(detailed) 
+    modern_listener(std::ostream &os = std::cerr) : out(os)
     {}
 
     ~modern_listener() {

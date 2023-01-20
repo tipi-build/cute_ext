@@ -17,6 +17,7 @@ Features
 - 🚀 `--maniac` mode: brute-force accelerate the test execution by rearanging the test suites to fit the maximum hardware parallelity for the executing machine (has a bit of ☣️ potential depending on the test design and selected process model)
     - `--maniac=thread` (default) run all maniac suites in the same process on as many threads as deemed necessary
     - `--maniac=process` spwans child processes as deemed necessary
+    - `-j <n-streads>` choose the level of concurrency if you like - defaults to `N hardware-threads + 1`
 
 The output of `test/main --run`
 

@@ -25,13 +25,14 @@
 
 #include "util.hpp"
 #include "modern_listener.hpp"
+#include "modern_xml_listener.hpp"
 
 namespace tipi::cute_ext {
   using namespace std::string_literals;
 
   class wrapper {
   private:
-    std::map<std::string, const cute::suite&> all_suites_{};
+    std::map<std::string, cute::suite> all_suites_{};
     flags::args args_;
     std::string program_exe_path;
 
@@ -85,6 +86,8 @@ namespace tipi::cute_ext {
           << "                               - 'thread' (default) runs all suites in the same process on distinct threads\n"
           << "                               - 'process' one process per generated suite\n"
           << "\n"
+          << "  -j=<N>                      Override the concurrency level for --maniac mode\n"
+          << "\n"
           << "  --help,-h,-?                Print this help\n"
           << std::endl;
     }
@@ -130,7 +133,7 @@ namespace tipi::cute_ext {
         }
       }
 
-      auto msmap = std::map<std::string, const cute::suite&>{
+      auto msmap = std::map<std::string, cute::suite>{
         { "maniac suite", msuite }
       };
 
@@ -152,8 +155,8 @@ namespace tipi::cute_ext {
       auto filter_unit_enabled = make_filter_fn(args_.get<std::string>("filter", ""));
 
       // how many strands do we want
-      const auto maniac_strands_arg = args_.get<size_t>("maniac-strands", std::thread::hardware_concurrency());
-      size_t maniac_strands = maniac_strands_arg + 1;
+      const auto maniac_strands_arg = args_.get<size_t>("j", std::thread::hardware_concurrency() + 1);
+      size_t maniac_strands = maniac_strands_arg;
 
       // subdivide all the existing suites into new ones (like a maniac)
       std::vector<cute::suite> maniac_suites{maniac_strands};
@@ -163,6 +166,7 @@ namespace tipi::cute_ext {
       }
       
       auto next_msuite_ix = 0;
+      size_t output_count_number_tests = 0;
 
       for(const auto &[info, suite] : all_suites_) {
         
@@ -175,6 +179,7 @@ namespace tipi::cute_ext {
           
           if(filter_unit_enabled(test_case.name())) {
             maniac_suites.at(next_msuite_ix++).push_back(test_case);
+            output_count_number_tests++;
             if(next_msuite_ix >= maniac_strands) {
               next_msuite_ix = 0;
             }
@@ -193,7 +198,7 @@ namespace tipi::cute_ext {
 
           try {               
             auto msuite = maniac_suites.at(ix); 
-            auto msmap = std::map<std::string, const cute::suite&>{
+            auto msmap = std::map<std::string, cute::suite>{
               { "maniac suite "s + std::to_string(ix), msuite }
             };
 
@@ -209,16 +214,20 @@ namespace tipi::cute_ext {
 
         struct strand_data {
           bool done;
+          bool success;
           std::future<std::pair<bool, std::string>> future;
 
           strand_data(size_t ix, std::function<std::pair<bool, std::string>(size_t)> fn)
             : done(false)
+            , success{false}
             , future(std::async(std::launch::async, fn, ix)) 
           {
           }
         };
         
-        std::vector<strand_data> future_results{};          
+        std::vector<strand_data> future_results{};       
+
+        size_t output_count_suites = 0;
 
         for(size_t ix = 0; ix < maniac_strands; ix++) {
 
@@ -227,8 +236,13 @@ namespace tipi::cute_ext {
           }
 
           future_results.push_back({ ix, strand_fn });
+          output_count_suites++;
         }
 
+        auto &out = get_output();
+        out << get_maniac_output_wrapper_start(output_count_number_tests);
+
+        auto ts_start = std::chrono::steady_clock::now();
         bool success = true;
 
         while(std::any_of(future_results.begin(), future_results.end(), [](auto &e) { return e.done == false; })) {
@@ -240,25 +254,35 @@ namespace tipi::cute_ext {
               if(status == std::future_status::ready) {
                 sd.done = true;
                 auto result = sd.future.get();
-                success = success && result.first;
-                get_output() << result.second;
+                sd.success = result.first;
+                out << result.second;
+
+                success = success && sd.success;
               }
             }
           }
         }
 
-        std::exit((success) ? 0 : 1);
+        auto ts_end = std::chrono::steady_clock::now();
+
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(ts_end - ts_start);
+        size_t output_count_suites_success = std::count_if(future_results.begin(), future_results.end(), [](auto &sd) { return sd.success == true; });
+        size_t output_count_suites_failed  = std::count_if(future_results.begin(), future_results.end(), [](auto &sd) { return sd.success == false; });
+
+        out << get_maniac_output_wrapper_end(output_count_suites, output_count_suites_success, output_count_suites_failed, duration);
       }
       else if(maniac_mode == "process") {
 
         
         struct maniac_proc {
           bool done;
+          bool success;
           std::shared_ptr<TinyProcessLib::Process> process_ptr;
           std::shared_ptr<std::stringstream> out_ss_ptr;
 
           maniac_proc(const std::string& command, const cute::suite& suite) 
             : done(false)
+            , success(false)
             , out_ss_ptr{std::make_shared<std::stringstream>()}
           {
             std::stringstream cmd_ss{};
@@ -315,6 +339,7 @@ namespace tipi::cute_ext {
           }
         }
 
+        size_t output_count_suites = 0;
         for(auto &msuite : maniac_suites) {
 
           if(msuite.size() == 0) {
@@ -322,10 +347,15 @@ namespace tipi::cute_ext {
           }
 
           processes.push_back({ cmd_ss.str(), msuite });
+          output_count_suites++;
         }
 
-        
+        // run and output stuff
+        auto &out = get_output();
+        out << get_maniac_output_wrapper_start(output_count_number_tests);
+
         bool success = true;
+        auto ts_start = std::chrono::steady_clock::now();
 
         while(std::any_of(processes.begin(), processes.end(), [](auto &e) { return e.done == false; })) {
           for(maniac_proc& sd : processes) {
@@ -335,20 +365,32 @@ namespace tipi::cute_ext {
 
               if(sd.process_ptr->try_get_exit_status(exit_code)) {
                 sd.done = true;
-                success = success && (exit_code == 0);
-                get_output() << sd.out_ss_ptr->str();                
+                sd.success = (exit_code == 0);
+                out << sd.out_ss_ptr->str();                
+
+                success = success && sd.success;                
               }
             }
           }
         }
-        
-        std::exit((success) ? 0 : 1);
+
+        auto ts_end = std::chrono::steady_clock::now();
+
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(ts_end - ts_start);
+        size_t output_count_suites_success = std::count_if(processes.begin(), processes.end(), [](auto &sd) { return sd.success == true; });
+        size_t output_count_suites_failed  = std::count_if(processes.begin(), processes.end(), [](auto &sd) { return sd.success == false; });
+
+        out << get_maniac_output_wrapper_end(output_count_suites, output_count_suites_success, output_count_suites_failed, duration);
+
+        return success;
       }
       else {
         std::stringstream ss_err{};
         ss_err << "Unknown --maniac option: " << maniac_mode << " (valid options are: 'thread' or 'process')";
         throw std::runtime_error(ss_err.str());
       }
+
+      return false;
     }
 
     bool cmd_run_base() {
@@ -373,8 +415,8 @@ namespace tipi::cute_ext {
       return *out_stream_;
     }
 
-    wrapper(int argc, char *argv[])
-      : args_(argc, argv) 
+    wrapper(int argc, char *argv[]) 
+      : args_(argc, argv)
     {
       const auto out_arg = args_.get<std::string>("output", "cout");
       
@@ -451,12 +493,12 @@ namespace tipi::cute_ext {
     }
     
 
-    void register_suite(const cute::suite& suite, const std::string& info) {
+    void register_suite(cute::suite suite, const std::string& info) {
       all_suites_.insert({ info, suite });
     }
 
     template <typename Listener=cute::null_listener>
-    bool run_templated(Listener & listener, const std::map<std::string, const cute::suite&> &suites) {
+    bool run_templated(Listener & listener, const std::map<std::string, cute::suite> &suites) {
 
       const auto filter_test_suite_arg = args_.get<std::string>("filter-suite", "");
       const auto filter_test_case_arg = args_.get<std::string>("filter", "");
@@ -468,17 +510,15 @@ namespace tipi::cute_ext {
       auto run_unit = [&](const cute::test& t) {
 
         if(filter_unit_enabled(t.name()) == false) {
-
           if(skipped_as_pass) {
             listener.start(t);
             listener.success(t, "SKIPPED");
           }
-
           return true;
         }
 
-        try {
-          listener.start(t);
+        try {          
+          listener.start(t);          
           t();
           listener.success(t, "OK");
           return true;
@@ -501,12 +541,15 @@ namespace tipi::cute_ext {
       for(const auto &[suite_name, suite] : suites) {
 
         if(filter_suite_enabled(suite_name)) {
-          listener.begin(suite, suite_name.c_str(), suite.size());
+
+
+
+          listener.begin(suite, suite_name.c_str(), suite.size());          
 
           for(auto &test : suite) {
-            run_unit(test);
+            result &= run_unit(test);
           }
-
+          
           listener.end(suite, suite_name.c_str());
         }
         else {
@@ -522,20 +565,21 @@ namespace tipi::cute_ext {
       return result;
     }
 
-    bool run_suites(const std::map<std::string, const cute::suite&> &suites, std::ostream& output_stream) {
+    bool run_suites(const std::map<std::string, cute::suite> &suites, std::ostream& output_stream) {
       
       const auto listener_arg = args_.get<std::string>("listener", "modern");
+      const auto is_maniac_mode = args_.get<bool>("maniac", false);
 
       if(listener_arg == "ide") { 
-        cute::ide_listener<> listener(output_stream);
-        return run_templated<>(listener, suites);
+        cute::ide_listener<> listener(output_stream); 
+        return run_templated<>(listener, suites);  // in maniac mode we don't want to open/close the test-suites root element
       }
       else if(listener_arg == "classic") {
         cute::ostream_listener<> listener(output_stream);
         return run_templated<>(listener, suites);
       }
-      else if(listener_arg == "xml"){        
-        cute::xml_listener<> listener(output_stream);
+      else if(listener_arg == "xml"){
+        cute_ext::modern_xml_listener<> listener(output_stream, !is_maniac_mode);
         return run_templated<>(listener, suites);
       }
       else if(listener_arg == "modern"){        
@@ -549,7 +593,68 @@ namespace tipi::cute_ext {
       }
     }
 
-    bool run_suites(const std::map<std::string, const cute::suite&> &suites) { 
+    std::string get_maniac_output_wrapper_start(size_t no_of_tests) {
+      
+      const auto listener_arg = args_.get<std::string>("listener", "modern");
+
+      if(listener_arg == "ide") { 
+        return "\n";        
+      }
+      else if(listener_arg == "classic") {
+        return "\n";
+      }
+      else if(listener_arg == "xml"){        
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n"s;
+      }
+      else if(listener_arg == "modern"){        
+        return "🏃🏃🏃🏃🏃 Starting MANIAC test run 🏃🏃🏃🏃🏃\n----------------------------------------------\n";
+      }
+
+      throw std::runtime_error("Unknown --listener option"); // should have thrown earlier, but anyways
+    }
+
+    std::string get_maniac_output_wrapper_end(
+      size_t suite_count, 
+      size_t suite_success, 
+      size_t suite_failures, 
+      std::chrono::milliseconds total_time
+    ) {
+      
+      const auto listener_arg = args_.get<std::string>("listener", "modern");
+
+      if(listener_arg == "ide") { 
+        return "\n";        
+      }
+      else if(listener_arg == "classic") {
+        return "\n";
+      }
+      else if(listener_arg == "xml"){        
+        return "</testsuites>";
+      }
+      else if(listener_arg == "modern"){        
+        std::stringstream out{};
+
+        out << "----------------------------------------------\n"
+            << "MANIAC test stats       " << ((suite_failures == 0) ? "🟢 PASS" : "🟥 FAILED") << "\n"
+            << " - suites executed:     " << suite_count << "\n";
+
+        if(suite_success == suite_count) { out << termcolor::green; } else { out << termcolor::reset; }
+        out << " - suites pass:         " << suite_success << termcolor::reset << "\n";
+
+        if(suite_failures > 0) {
+          out << termcolor::red << " - suites failed:       " << suite_failures << termcolor::reset << "\n";
+        }
+
+        auto duration_s = std::chrono::duration_cast<std::chrono::duration<double>>(total_time);
+        out << " - total duration:      " << duration_s.count() << "s\n" << std::endl;
+
+        return out.str();
+      }
+
+      throw std::runtime_error("Unknown --listener option"); // should have thrown earlier, but anyways
+    }
+
+    bool run_suites(const std::map<std::string, cute::suite> &suites) { 
       return run_suites(suites, get_output());
     }
 

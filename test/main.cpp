@@ -42,6 +42,17 @@ public:
 
 };
 
+cute::suite make_suite_ReadOnlyIniFileTest()
+{
+    cute::suite s {};
+    s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "temp_0"));
+    s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "temp_1"));
+    s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "temp_2"));
+    return s;
+}
+
+
+using namespace std::string_literals;
 
 int main(int argc, char *argv[]){
     tipi::cute_ext::util::enable_vt100_support_windows10();
@@ -71,9 +82,20 @@ int main(int argc, char *argv[]){
     s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_5");
     s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_6");
     s2 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s2_7");
+
+
+    cute::suite s3{};
+    for(size_t i = 0; i < 200; i++) {
+        std::string ctx = "s3_"s + std::to_string(i);
+        s3 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, ctx.c_str());
+    }
+
+    s3 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s3_201");
     
     wrapper.register_suite(s1, "Suite 1");
     wrapper.register_suite(s2, "Suite 2");
+    wrapper.register_suite(s3, "Suite 3");
+    wrapper.register_suite(make_suite_ReadOnlyIniFileTest(), "Temp suite");
 
     try {
         wrapper.process_cmd();
