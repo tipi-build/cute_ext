@@ -67,6 +67,9 @@ namespace tipi::cute_ext
     {
       wrapped_->error(test, what);
     }
+
+    void render_preamble() {}
+    void render_end() { }
   };
 
 }

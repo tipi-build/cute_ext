@@ -26,7 +26,7 @@
 #include <process.hpp>
 
 #include "util.hpp"
-//#include "modern_listener.hpp"
+#include "modern_listener.hpp"
 #include "parallel_listener.hpp"
 #include "modern_xml_listener.hpp"
 #include "cute_listener_wrapper.hpp"
@@ -479,6 +479,8 @@ namespace tipi::cute_ext {
 
 
       /** The actual running thing */
+      listener.render_preamble();
+
       while(tasks_remaining() && !all_suites_printed()) {
 
         // start as many tasks as we have "slots"
@@ -497,7 +499,7 @@ namespace tipi::cute_ext {
         std::this_thread::sleep_for(10ms);
       }
 
-      //std::exit(0);
+      listener.render_end();
 
       return tests_failed == 0;
     }
@@ -652,7 +654,7 @@ namespace tipi::cute_ext {
             return cmd_autoparallel<>(wrapped);
           }
           else if(opt_listener == "modern" ||true){        
-            cute_ext::parallel_listener<> listener(output_stream);
+            cute_ext::modern_listener<> listener(output_stream);
             return cmd_autoparallel<>(listener);
           }
           else {
@@ -804,7 +806,7 @@ namespace tipi::cute_ext {
         return run_templated<>(wrapped, suites);
       }
       else if(opt_listener == "modern"){
-        cute_ext::parallel_listener<> listener(output_stream);
+        cute_ext::modern_listener<> listener(output_stream);
         return run_templated<>(listener, suites);
       }
       else {

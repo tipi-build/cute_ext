@@ -1,229 +1,215 @@
 #pragma once
 
+#include <chrono>
+#include <atomic>
 #include <string>
 #include <iostream>
+#include <map>
 #include <sstream>
+#include <optional>
 #include <atomic>
+#include <vector>
+#include <mutex>
 
 #include <cute/cute_listener.h>
 #include <termcolor/termcolor.hpp>
+#include "parallel_listener.hpp"
 
 namespace tipi::cute_ext
 {
-  using namespace std::string_literals;
-
-  template <typename Listener = cute::null_listener>
-  struct modern_listener : Listener
+  template <typename ParallelListener=cute_ext::parallel_listener<>>
+  struct modern_listener : public ParallelListener
   {
-    std::ostream &out;
-
-    const std::string SEPARATOR_THICK = "===============================================================================\n";    
+  protected:
+    const std::string SEPARATOR_THICK = "===============================================================================\n";
     const std::string SEPARATOR_THIN  = "-------------------------------------------------------------------------------\n";
-
-    std::atomic<size_t> total_suites_failed = 0;
-    std::atomic<size_t> total_suites_passed = 0;
-
-    bool print_summary = false;
-
-
-    std::atomic<size_t> suite_expected = 0;
-    std::atomic<size_t> suite_failures = 0;
-    std::atomic<size_t> suite_errors = 0;
-    std::atomic<size_t> suite_success = 0;
-
-    std::map<const cute::suite*, std::chrono::steady_clock::time_point> suite_start_times{};
-    std::map<const cute::test*, std::chrono::steady_clock::time_point> test_start_times{};
-
-    std::vector<std::chrono::milliseconds> test_case_durations{};
-    std::vector<std::string> failed_tests{};
+  
 
   public:
-    modern_listener(bool print_summary, std::ostream &os = std::cerr) 
-      : out(os)
-      , print_summary(print_summary)
-    {}
-
-    modern_listener(std::ostream &os = std::cerr) : out(os)
-    {}
-
+    modern_listener(std::ostream &os = std::cerr) : ParallelListener(os)
+    {
+    }
+    
     ~modern_listener() {
+    }
+
+    void virtual render_preamble() override {
+
+      if(render_listener_info) {
+
+        auto now = std::chrono::system_clock::now();
+        std::time_t now_tm = std::chrono::system_clock::to_time_t(now);
+
+        std::string datetimenowstr{std::ctime(&now_tm)};
+        datetimenowstr.pop_back();  // f*ck that last \n
+
+
+        out << "Awesome testing with " << termcolor::cyan << termcolor::bold << "tipi.build" << termcolor::reset << " + " << termcolor::yellow << "CUTE" << termcolor::reset << "\n"
+            << " -> Starting test at: " << datetimenowstr << " - [" <<  now.time_since_epoch().count() << "]\n"
+            << SEPARATOR_THIN
+            << "\n";
+
+      }
+
+    }
+
+    void virtual render_end() override {
       using namespace std::chrono_literals;
 
-      if(print_summary) {
-        auto total_time_ms = 0ms;
+      if(render_listener_info) {
+        double total_time_ms = 0;
 
-        for(auto& v : test_case_durations) {
-          total_time_ms += v;
+        for(auto &[test, test_ptr] : tests) {
+          total_time_ms += test_ptr->get_test_duration().count();         
         }
 
-        auto total_time = std::chrono::duration_cast<std::chrono::duration<double>>(total_time_ms);
-
-        // duration_s = total_time;
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(listener_end.value_or(std::chrono::steady_clock::now()) - listener_start);        
 
         out << "\n"
             << "Test stats: \n"
-            << " - suites executed:     " << suite_start_times.size() << "\n"
-            << " - suites passed:       " << total_suites_passed << "\n";
+            << " - suites executed:     " << suites.size() << "\n"
+            << " - suites passed:       " << suite_success << "\n";
 
-        if(total_suites_failed > 0) { out << termcolor::red; }
-        out << " - suites failed:       " << total_suites_failed << "\n";
-        if(total_suites_failed > 0) { out << termcolor::reset; }
+        if(suite_failures > 0) { out << termcolor::red; }
+        out << " - suites failed:       " << suite_failures << "\n";
+        if(suite_failures > 0) { out << termcolor::reset; }
 
-        out << " - test cases executed: " << test_start_times.size() << "\n"
-            << " - total duration:      " << total_time.count() << "s\n" 
-            << "\n"
-            << "Result " << ((total_suites_failed == 0) ? "🟢 PASS" : "🟥 FAILED")
-            << "\n"
-            << std::endl;
+        out << " - test cases executed: " << tests.size() << "\n"
+            << " - total test time:     " << total_time_ms << "s\n" 
+            << " - total user time:     " << user_total_time_ms.count() << "s\n"
+            << "\n";
+
+          
+        if(suite_failures == 0) {
+          out << termcolor::green << "✔  PASS";
+        } 
+        else {
+          out << termcolor::red << "❌ FAILED";
+        }
+
+        out << termcolor::reset << std::endl;
       }
     }
 
-    std::string padRight(std::string str, const size_t num, const char paddingChar = ' ') 
-    {
-        if(num > str.size())
-            str.append(num - str.size(), paddingChar);
-
-        return str;
+    virtual void render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
+      if(render_test_info) {
+        tco << " ▶ " << util::padRight(unit->name, 40, ' ') << std::flush;
+      }        
     }
 
+    virtual void render_test_case_start(const std::shared_ptr<test_run> &unit) override {
+      auto &tco = (render_immediate_mode) ? out : unit->out;
 
-    void begin(cute::suite const &suite, char const *info, size_t n_of_tests)
-    {
-      suite_start_times.insert({ &suite, std::chrono::steady_clock::now() });
-
-      suite_failures.exchange(0);
-      suite_success.exchange(0);
-      suite_errors.exchange(0);
-      suite_expected.exchange(n_of_tests);
-
-      out << termcolor::bold << "🧫 Test suite: " << info << " (" << n_of_tests << " tests)" << termcolor::bold << "\n\n"; 
-
-      Listener::begin(suite, info, n_of_tests);
+      if(render_immediate_mode) {
+        render_test_case_header(tco, unit);
+      }
     }
 
-    void end(cute::suite const &suite, char const *info)
-    {
-      auto suite_finished_ts = std::chrono::steady_clock::now();
+    virtual void render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
 
-      if(suite_failures + suite_errors == 0) {
-        total_suites_passed++;
-
-        out << "\n"
-          << "  | Suite     🟢 PASS";
-
+      if(unit->outcome == test_run_outcome::Pass) {
+        tco << termcolor::green << util::padRight("✔  PASS", 12, ' ') << termcolor::reset;
+      }
+      else if(unit->outcome == test_run_outcome::Fail) {
+        tco << termcolor::red << util::padRight("❌ FAILED", 11, ' ') << termcolor::reset;
+      }
+      else if(unit->outcome == test_run_outcome::Error) {
+        tco << termcolor::red << util::padRight("❌ ERROR", 11, ' ') << termcolor::reset;
       }
       else {
-        total_suites_failed++;
-        out << "\n"
-          << "  | Suite     🟥 FAILED";
+        tco << termcolor::cyan << "O RUNNING/Unknown" << termcolor::reset;
       }
 
-      /* calulate how long the suite took */
-      if(suite_start_times.find(&suite) != suite_start_times.end()) {
-        auto suite_duration_s = std::chrono::duration_cast<std::chrono::duration<double>>(suite_finished_ts - suite_start_times[&suite]);
-        out << " (" << suite_duration_s.count() << "s)";
+      tco << "    (" << unit->get_test_duration().count() << "ms)";
+
+      if(unit->outcome == test_run_outcome::Fail) {
+        tco << "\n"
+            << SEPARATOR_THIN
+            << unit->info.str()
+            << "\n"
+            << termcolor::reset
+            << SEPARATOR_THIN;
       }
-
-      out << "\n";
-
-      out << "  | Tests     " << suite_expected  << "\n";
-
-      out << "  | ";
-      if(suite_success == suite_expected) { out << termcolor::green; }
-      out << "Pass      " << suite_success << "\n";
-      if(suite_success == suite_expected) { out << termcolor::reset; } 
-
-      if(suite_failures > 0) { 
-        out << "  | " << termcolor::red << "Failed    " << suite_failures << termcolor::reset << "\n";         
+      else if(unit->outcome == test_run_outcome::Error) {
+        tco << "\n"
+            << SEPARATOR_THIN
+            << "Unhandled exception:\n"
+            << unit->info.str()
+            << "\n"
+            << termcolor::reset
+            << SEPARATOR_THIN;
       }
-
-      if(suite_errors > 0) { 
-        out << "  | " << termcolor::red << "Errored   " << suite_errors << termcolor::reset << "\n";         
+      else {
+        tco << "\n";
       }
-
-      if((suite_expected - suite_failures - suite_errors - suite_success) > 0) {
-        out << "  | " << termcolor::yellow << "Skipped   " << std::to_string(suite_expected - suite_failures - suite_errors - suite_success) << termcolor::reset << "\n";
-      }
-        
-      out << std::endl;
-      Listener::end(suite, info);
+    
     }
 
-    void start(cute::test const &test)
-    {
-      test_start_times.insert({ &test, std::chrono::steady_clock::now() });
-      out << " 🧪 " << padRight(test.name(), 40, ' ');      
-      Listener::start(test);
+    virtual void render_test_case_end(const std::shared_ptr<test_run> &unit) override {
+
+      auto &tco = (render_immediate_mode) ? out : unit->out;
+
+      if(render_test_info) {
+        if(!render_immediate_mode) {
+          render_test_case_header(tco, unit);
+        }
+
+        render_test_case_result(tco, unit);        
+      }
+      else {
+        tco << unit->info.str();
+      } 
     }
 
-    void success(cute::test const &test, char const *msg)
-    {
-      auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_success++;
 
-      out << termcolor::bold << "🟢 PASS";
-
-      /* calulate how long the suite took */
-      if(test_start_times.find(&test) != test_start_times.end()) {
-        auto duration_s = std::chrono::duration_cast<std::chrono::milliseconds>(test_finished_ts - test_start_times[&test]);
-        test_case_durations.push_back(duration_s);
-        out << "    (" << duration_s.count() << "ms)";
+    virtual void render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+      if(render_suite_info) {
+        sot << " ● " << suite_ptr->name << "\n" << SEPARATOR_THICK << "\n";
       }
-
-      out << termcolor::reset << std::endl;
-
-      Listener::success(test, msg);
     }
-    void failure(cute::test const &test, cute::test_failure const &e)
-    {
-      auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_failures++;
 
-      failed_tests.push_back(test.name());
+    virtual void render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+      if(render_suite_info) {
 
-      out << termcolor::bold << "🟥 FAILED" << termcolor::reset;
+        if(suite_ptr->count_errors + suite_ptr->count_failures == 0) {
+          suite_success++;
+          sot << "\n"
+              << "  | Suite     ✔  PASS";
+        }
+        else {
+          suite_failures++;
+          sot << "\n"
+              << "  | Suite     ❌ FAILED";
+        }
 
-      /* calulate how long the cast took */
-      if(test_start_times.find(&test) != test_start_times.end()) {
-        auto duration_s = std::chrono::duration_cast<std::chrono::milliseconds>(test_finished_ts - test_start_times[&test]);
-        test_case_durations.push_back(duration_s);
-        out << "  (" << duration_s.count() << "ms)";
+        /* calulate how long the suite took */
+        sot << " (" << suite_ptr->get_suite_duration().count() << "s)";
+
+        sot << "\n";
+
+        sot << "  | Tests     " << suite_ptr->count_expected  << "\n";
+
+        sot << "  | ";
+        if(suite_ptr->count_success == suite_ptr->count_expected) { sot << termcolor::green; }
+        sot << "Pass      " << suite_ptr->count_success << "\n";
+        if(suite_ptr->count_success == suite_ptr->count_expected) { sot << termcolor::reset; } 
+
+        if(suite_ptr->count_failures > 0) { 
+          sot << "  | " << termcolor::red << "Failed    " << suite_ptr->count_failures << termcolor::reset << "\n";         
+        }
+
+        if(suite_ptr->count_errors > 0) { 
+          sot << "  | " << termcolor::red << "Errored   " << suite_ptr->count_errors << termcolor::reset << "\n";         
+        }
+
+        auto count_skipped = suite_ptr->count_expected - suite_ptr->count_failures - suite_ptr->count_errors - suite_ptr->count_success;
+
+        if(count_skipped > 0) {
+          sot << "  | " << termcolor::yellow << "Skipped   " << std::to_string(count_skipped) << termcolor::reset << "\n";
+        }
+          
+        sot << "\n\n";
       }
-
-      out << "\n"
-          << SEPARATOR_THIN
-          << termcolor::bright_grey
-          << e.filename << ":" << e.lineno << "\n"
-          << termcolor::red
-          << e.reason << "\n"
-          << termcolor::reset
-          << SEPARATOR_THIN;
-
-      Listener::failure(test, e);
-    }
-    void error(cute::test const &test, char const *what)
-    {
-      auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_errors++;
-      out << termcolor::bold <<  "🟥 ERROR" << termcolor::reset;
-
-      /* calulate how long the cast took */
-      if(test_start_times.find(&test) != test_start_times.end()) {
-        auto duration_s = std::chrono::duration_cast<std::chrono::milliseconds>(test_finished_ts - test_start_times[&test]);
-        test_case_durations.push_back(duration_s);
-        out << "  (" << duration_s.count() << "ms)";
-      }
-
-      out << "\n"
-          << SEPARATOR_THIN
-          << termcolor::bright_grey
-          << "Unhandled exception:\n"
-          << termcolor::red
-          << what << "\n"
-          << termcolor::reset
-          << SEPARATOR_THIN;
-
-      Listener::error(test, what);
     }
   };
 
