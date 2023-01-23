@@ -417,6 +417,7 @@ namespace tipi::cute_ext {
       set_render_options(listener, true, true, true, false);
       
       std::atomic<size_t> tests_failed = 0;
+      std::atomic<size_t> tests_running = 0;
 
       auto start_next = [&]() {
         auto nextit = next_task_it();
@@ -425,6 +426,7 @@ namespace tipi::cute_ext {
           nextit->start([&](const auto &task) {
 
             auto urr = task.get_run_unit_result();
+            tests_running--;
 
             if(urr == run_unit_result::passed || urr == run_unit_result::skipped) {
               listener.success(task.get_cute_unit(), "");
@@ -439,6 +441,8 @@ namespace tipi::cute_ext {
             }
           });
 
+          tests_running++;
+
           auto suite_name = nextit->get_suite_name();
           mark_suite_started(suite_name);
 
@@ -451,9 +455,9 @@ namespace tipi::cute_ext {
         return false;
       };
 
-      auto count_running = [&]() {
-        return std::count_if(tasks.begin(), tasks.end(), [](auto &t) { return t.is_running() == true; });
-      };
+      /*auto count_running = [&]() {
+        return tests_running;
+      };*/
 
       auto suite_finished = [&](const std::string& suite) {
         size_t count_tests  = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite; });
@@ -484,7 +488,7 @@ namespace tipi::cute_ext {
       while(tasks_remaining() && !all_suites_printed()) {
 
         // start as many tasks as we have "slots"
-        while(tasks_remaining() && count_running() < opt_maniac_strands_arg) {
+        while(tasks_remaining() && tests_running < opt_maniac_strands_arg) {
           start_next();
         }        
 
@@ -648,12 +652,17 @@ namespace tipi::cute_ext {
             auto wrapped = cute_listener_wrapper(&listener);
             return cmd_autoparallel<>(wrapped);
           }
-          else if(opt_listener == "xml"){
+          /* /!\ exe BOMB here?
+          else if(opt_listener == "classicxml"){
             cute::xml_listener<> listener(output_stream);
             auto wrapped = cute_listener_wrapper(&listener);
             return cmd_autoparallel<>(wrapped);
           }
-          else if(opt_listener == "modern" ||true){        
+          else if(opt_listener == "modernxml"){
+            cute_ext::modern_xml_listener<> listener(output_stream);
+            return cmd_autoparallel<>(listener);
+          }*/
+          else if(opt_listener == "modern"){        
             cute_ext::modern_listener<> listener(output_stream);
             return cmd_autoparallel<>(listener);
           }
@@ -800,11 +809,16 @@ namespace tipi::cute_ext {
         auto wrapped = cute_listener_wrapper(&listener);
         return run_templated<>(wrapped, suites);
       }
-      else if(opt_listener == "xml"){        
+      /* // /!\ exe BOMB here?
+      else if(opt_listener == "classicxml"){
         cute::xml_listener<> listener(output_stream);
         auto wrapped = cute_listener_wrapper(&listener);
-        return run_templated<>(wrapped, suites);
+        return cmd_autoparallel<>(wrapped);
       }
+      else if(opt_listener == "modernxml"){
+        cute_ext::modern_xml_listener<> listener(output_stream);
+        return cmd_autoparallel<>(listener);
+      }*/
       else if(opt_listener == "modern"){
         cute_ext::modern_listener<> listener(output_stream);
         return run_templated<>(listener, suites);
@@ -814,67 +828,6 @@ namespace tipi::cute_ext {
         ss_err << "XXX Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'classic', 'ide', 'xml')";
         throw std::runtime_error(ss_err.str());
       }
-    }
-
-    std::string get_maniac_output_wrapper_start(size_t no_of_tests) {
-      
-      const auto listener_arg = args_.get<std::string>("listener", "modern");
-
-      if(listener_arg == "ide") { 
-        return "\n";        
-      }
-      else if(listener_arg == "classic") {
-        return "\n";
-      }
-      else if(listener_arg == "xml"){        
-        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n"s;
-      }
-      else if(listener_arg == "modern"){        
-        return "🏃🏃🏃🏃🏃 Starting MANIAC test run 🏃🏃🏃🏃🏃\n----------------------------------------------\n";
-      }
-
-      throw std::runtime_error("Unknown --listener option"); // should have thrown earlier, but anyways
-    }
-
-    std::string get_maniac_output_wrapper_end(
-      size_t suite_count, 
-      size_t suite_success, 
-      size_t suite_failures, 
-      std::chrono::milliseconds total_time
-    ) {
-      
-      const auto listener_arg = args_.get<std::string>("listener", "modern");
-
-      if(listener_arg == "ide") { 
-        return "\n";        
-      }
-      else if(listener_arg == "classic") {
-        return "\n";
-      }
-      else if(listener_arg == "xml"){        
-        return "</testsuites>";
-      }
-      else if(listener_arg == "modern"){        
-        std::stringstream out{};
-
-        out << "----------------------------------------------\n"
-            << "MANIAC test stats       " << ((suite_failures == 0) ? "🟢 PASS" : "🟥 FAILED") << "\n"
-            << " - suites executed:     " << suite_count << "\n";
-
-        if(suite_success == suite_count) { out << termcolor::green; } else { out << termcolor::reset; }
-        out << " - suites pass:         " << suite_success << termcolor::reset << "\n";
-
-        if(suite_failures > 0) {
-          out << termcolor::red << " - suites failed:       " << suite_failures << termcolor::reset << "\n";
-        }
-
-        auto duration_s = std::chrono::duration_cast<std::chrono::duration<double>>(total_time);
-        out << " - total duration:      " << duration_s.count() << "s\n" << std::endl;
-
-        return out.str();
-      }
-
-      throw std::runtime_error("Unknown --listener option"); // should have thrown earlier, but anyways
     }
 
     bool run_suites(const std::unordered_map<std::string, cute::suite> &suites) { 
