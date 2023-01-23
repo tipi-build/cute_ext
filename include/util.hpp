@@ -36,6 +36,12 @@ namespace tipi::cute_ext::util
     return result;
   }
 
+  std::string padRight(std::string str, const size_t num, const char paddingChar = ' ') 
+  {
+      if(num > str.size()) { str.append(num - str.size(), paddingChar); }
+      return str;
+  }
+
   template <typename TestClass, typename MemFun>
 	cute::test makeSimpleMemberFunctionTest(MemFun fun,char const *name, char const *ctx){
 		return cute::test(cute::incarnate_for_member_function<TestClass,MemFun>(fun), cute::demangle(typeid(TestClass).name())+"::"+name+"::"+ctx);
@@ -67,7 +73,7 @@ namespace tipi::cute_ext::util
     #if defined(_WIN32)
 
       if(std::getenv("MSYSTEM") != NULL) {
-        std::cerr << "[win - VT100] detected MSYS console. VT100 sequences are supported" << std::endl;
+        //std::cerr << "[win - VT100] detected MSYS console. VT100 sequences are supported" << std::endl;
         // nothing to do, most of the fancy stuff will just work!
       }
       else {
@@ -77,21 +83,21 @@ namespace tipi::cute_ext::util
           HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
           if (hOut == INVALID_HANDLE_VALUE)
           {
-            std::cerr << "[win - VT100] Failed to acquire STD_OUTPUT_HANDLE" << std::endl;
+            //std::cerr << "[win - VT100] Failed to acquire STD_OUTPUT_HANDLE" << std::endl;
             return GetLastError();
           }
 
           DWORD dwMode = 0;
           if (!GetConsoleMode(hOut, &dwMode))
           {
-            std::cerr << "[win - VT100] Failed to get console mode" << std::endl;
+            //std::cerr << "[win - VT100] Failed to get console mode" << std::endl;
             return GetLastError();
           }
 
           dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
           if (!SetConsoleMode(hOut, dwMode))
           {
-            std::cerr << "[win - VT100] Failed to enable VT100 sequence processing" << std::endl;
+            //std::cerr << "[win - VT100] Failed to enable VT100 sequence processing" << std::endl;
             return GetLastError();
           }
 
@@ -102,13 +108,13 @@ namespace tipi::cute_ext::util
         int ret = enable_vt();
       
         if(ret != 0) {
-          std::cerr << "[win - VT100] -> return code: " << ret << std::endl;
-          std::cerr << "[win - VT100] not using VT100 escape sequences" << std::endl;
+          //std::cerr << "[win - VT100] -> return code: " << ret << std::endl;
+          //std::cerr << "[win - VT100] not using VT100 escape sequences" << std::endl;
         }
 
         // using the utf8 code page
         if(!SetConsoleOutputCP(65001)) {
-          std::cerr << "[win - VT100] switch to CP65001 failed with return code: " << GetLastError() << std::endl;
+          //std::cerr << "[win - VT100] switch to CP65001 failed with return code: " << GetLastError() << std::endl;
         }
       }
     #else

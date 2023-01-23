@@ -1,4 +1,3 @@
-
 #include <cute/cute.h>
 #include <cute/cute_runner.h>
 #include <cute/ide_listener.h>
@@ -9,9 +8,14 @@
 #include <tipi_cute_ext.hpp>
 #include <util.hpp>
 
+#include <parallel_listener.hpp>
+#include <cute_listener_wrapper.hpp>
+
 #include <iostream>
 #include <thread>
 #include <chrono>
+
+#include <termcolor/termcolor.hpp>
 
 using namespace std::chrono_literals;
 
@@ -28,7 +32,7 @@ public:
     }
 
     void failingtest(){
-        ASSERT_EQUAL(42, 0);
+        ASSERT_EQUAL(42, 1);
     }
 
     
@@ -56,14 +60,14 @@ cute::suite make_suite_ReadOnlyIniFileTest()
 
 using namespace std::string_literals;
 
-int main(int argc, char *argv[]){
-    tipi::cute_ext::util::enable_vt100_support_windows10();
-    
-
+int main(int argc, char *argv[]) {
+    tipi::cute_ext::util::enable_vt100_support_windows10();    
 
     cute::xml_file_opener xmlfile(argc, argv);
-    cute::xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};
-	tipi::cute_ext::wrapper wrapper(argc, argv, lis, false);
+    cute::xml_listener < cute::ide_listener<> > lis{xmlfile.out};    
+    //tipi::cute_ext::parallel_listener<> lis{};
+    //cute::ide_listener<> lis{};    
+	tipi::cute_ext::wrapper wrapper(lis, argc, argv, false);
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
@@ -93,7 +97,7 @@ int main(int argc, char *argv[]){
 
 
     cute::suite s3{};
-    for(size_t i = 0; i < 200; i++) {
+    for(size_t i = 0; i < 20; i++) {
         std::string ctx = "s3_"s + std::to_string(i);
         s3 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, ctx.c_str());
     }
@@ -104,7 +108,7 @@ int main(int argc, char *argv[]){
     wrapper.register_suite(s2, "Suite 2");
     wrapper.register_suite(s3, "Suite 3");
     wrapper.register_suite(make_suite_ReadOnlyIniFileTest(), "Temp suite");
-    wrapper.register_suite(make_suite(), "External suite");
+    wrapper.register_suite(make_suite(), "External suite");    
 
     /*try {
         wrapper.process_cmd();

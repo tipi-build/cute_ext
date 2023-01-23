@@ -11,6 +11,7 @@
 #include <thread>
 #include <future>
 #include <optional>
+#include <type_traits>
 
 #include <cute/cute.h>
 
@@ -25,8 +26,10 @@
 #include <process.hpp>
 
 #include "util.hpp"
-#include "modern_listener.hpp"
+//#include "modern_listener.hpp"
+#include "parallel_listener.hpp"
 #include "modern_xml_listener.hpp"
+#include "cute_listener_wrapper.hpp"
 
 namespace tipi::cute_ext {
   using namespace std::string_literals;
@@ -36,20 +39,48 @@ namespace tipi::cute_ext {
 
   }
 
-  template <typename User_Supplied_Listener=cute::null_listener>
+  enum run_unit_result {
+    passed,
+    failed,   
+    errored,
+    skipped,
+    unknown
+  };
+
+  int run_unit_result_to_ret(const run_unit_result val) {
+    if(val == run_unit_result::passed) return 0;
+    else if(val == run_unit_result::failed) return 1;
+    else if(val == run_unit_result::errored) return 2;
+    else if(val == run_unit_result::skipped) return 3;
+    
+    return 8;
+  }
+
+  static run_unit_result ret_to_run_unit_result(const int val) {
+    if(val == 0) return run_unit_result::passed;
+    else if(val == 1) return run_unit_result::failed;
+    else if(val == 2) return run_unit_result::errored;
+    else if(val == 3) return run_unit_result::skipped;
+    return run_unit_result::unknown;
+  }
+
+  template <typename RunnerListener = cute::null_listener>
   class wrapper {
   private:
+
+    RunnerListener& runner_listener_{};
 
     
     bool opt_run_explicit = false;
     bool opt_show_help = false;
     bool opt_list_testcases = false;
     bool opt_skipped_as_pass = false;
-    bool opt_exit_on_destruction = true;
-
-
+    bool opt_exit_on_destruction = false;
     bool opt_auto_concurrent_run = true;
     bool opt_auto_concurrent_tc_set = true;
+    bool opt_force_cli_listener = false;
+
+    std::string opt_listener{};
     std::string opt_auto_concurrent_unit{};
     std::string opt_auto_concurrent_suite{};
 
@@ -57,6 +88,9 @@ namespace tipi::cute_ext {
     std::string opt_filter_unit_value{};
 
     size_t opt_maniac_strands_arg;
+
+    /// @brief used to communicate the test case exit reason (pass: 0 / fail: 1 / error: 2)  in autoparallel child mode
+    std::optional<int> force_destructor_exit_code;
 
 
     /***/
@@ -66,10 +100,6 @@ namespace tipi::cute_ext {
 
     std::shared_ptr<std::fstream> file_out_ptr_;
     std::ostream* out_stream_ = &std::cout;
-
-    User_Supplied_Listener &user_defined_listener_;
-    bool use_user_defined_listener_;
-
 
     std::atomic<size_t> test_exec_failures = 0;
 
@@ -177,22 +207,175 @@ namespace tipi::cute_ext {
       return success;
     }
 
-    bool cmd_maniac() {
+    struct autoparallel_testcase {
+
+      autoparallel_testcase(const std::string& base_cmd, const std::string &suite, const std::string &unit, const cute::test &cute_unit)
+        : process_base_cmd_(base_cmd)
+        , suite_(suite)
+        , unit_(unit)
+        , cute_unit_(cute_unit)
+        , out_ss_ptr_{std::make_shared<std::stringstream>()}
+      {          
+      }
+
+      ~autoparallel_testcase() {
+        if(process_thread_ptr && process_thread_ptr->joinable()) {            
+          process_thread_ptr->join();            
+        }
+      }
+
+      void start(std::function<void(const autoparallel_testcase&)> cb) {
+        // YS: not thread safe but idc for now
+        if(!started_) {
+          started_ = true; 
+          running_ = true;
+          process_thread_ptr = std::make_shared<std::thread>(&autoparallel_testcase::run_process, this, cb); 
+        }
+      }
+
+      auto get_suite_name() const { return suite_; }
+      auto get_unit_name() const { return unit_; }
+      const cute::test& get_cute_unit() const { return cute_unit_; }
+
+      bool is_running() const { return running_; }
+      bool was_started() const { return started_; }
+      bool is_done() const { return done_; }
+      bool was_success() const { return success_; }
+
+      run_unit_result get_run_unit_result() const {
+        auto rc = return_code();
+        if(rc.has_value()) {
+          return ret_to_run_unit_result(rc.value());
+        }
+
+        return run_unit_result::unknown;
+      }
+
+      std::optional<int> return_code() const {
+        return process_exit_code;
+      }
+    
+      std::string get_output() const {
+        if(out_ss_ptr_ != nullptr){
+          return out_ss_ptr_->str();
+        }       
+        
+        return "";
+      }
+
+    private:      
+
+      void run_process(std::function<void(const autoparallel_testcase&)> cb) {
+        std::stringstream cmd_ss{};
+        #if defined(_WIN32) && !defined(MSYS_PROCESS_USE_SH)
+        cmd_ss << "cmd /c ";
+        #endif
+
+        cmd_ss << process_base_cmd_ << " --parallel-suite \"" << suite_ << "\" --parallel-unit \"" << unit_ << "\"";
+
+        auto loc_ss_ptr = out_ss_ptr_;
+
+        try { 
+          auto processio = [loc_ss_ptr](const char *bytes, size_t n) {
+            auto &out = *loc_ss_ptr;
+            out << std::string(bytes, n);
+          };
+
+          process_ptr = std::make_shared<TinyProcessLib::Process>(
+            cmd_ss.str(), 
+            "", /* env */
+            processio,  /*stdout */
+            processio,  /*stderr */
+            false     /* don't open stdin */
+          );
+
+          int exit_code;
+          while(!process_ptr->try_get_exit_status(exit_code)) {
+            std::this_thread::sleep_for(1ms);
+          }
+
+          running_ = false;
+          success_ = exit_code == 0;
+          process_exit_code = exit_code;
+        }
+        catch(...) {
+          running_ = false;
+          success_ = false;
+        }
+
+        done_ = true;
+
+        cb(*this);
+      }
+
+
+      bool started_ = false;
+      bool running_ = false;
+      bool done_    = false;
+      bool success_ = false;
+      std::string suite_;
+      std::string unit_;
+      std::string process_base_cmd_;
+      const cute::test &cute_unit_;
+      
+      std::shared_ptr<std::stringstream> out_ss_ptr_;
+      std::shared_ptr<TinyProcessLib::Process> process_ptr;
+      std::optional<int> process_exit_code{};
+
+      std::shared_ptr<std::thread> process_thread_ptr;
+    };
+
+    // SFINAE tester
+    template <typename Listener>
+    class has_set_render_options
+    {
+    private:
+        typedef char YesType[1];
+        typedef char NoType[2];
+        template <typename Listener> static YesType& test( decltype(&Listener::set_render_options) ) ;
+        template <typename Listener> static NoType& test(...);
+    public:
+        enum { value = sizeof(test<Listener>(0)) == sizeof(YesType) };
+    };
+
+    template<typename FnListener> 
+    typename std::enable_if<has_set_render_options<FnListener>::value, void>::type
+    set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
+      listener.set_render_options(render_listener_info, render_suite_info, render_test_info, render_immediate_mode);
+    }
+
+    template<typename FnListener> 
+    typename std::enable_if<!has_set_render_options<FnListener>::value, void>::type
+    set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
+      // we don't have any setting to apply - this one doesn't have the set_render_options() method...
+    }
+
+    template <typename Listener=cute::null_listener>
+    bool cmd_autoparallel(Listener & listener) {
+
       auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
       auto filter_unit_enabled = make_filter_fn(opt_filter_unit_value);
 
-      // how many strands do we want
-      size_t maniac_strands = opt_maniac_strands_arg;
+      // build the base command
+      std::string base_process_cmd{};
 
-      // subdivide all the existing suites into new ones (like a maniac)
-      std::vector<cute::suite> maniac_suites{maniac_strands};
+      {
+        std::stringstream cmd_ss{};
+        cmd_ss << program_exe_path;
 
-      for(int i = 0; i < maniac_strands; i++) {
-        maniac_suites.push_back(cute::suite());
+        if(opt_listener.empty() == false) {
+          cmd_ss << " --listener=" << opt_listener << "";
+        }
+
+        if(opt_force_cli_listener) {
+          cmd_ss << " --force-listener";
+        }
+
+        base_process_cmd = cmd_ss.str();
       }
-      
-      auto next_msuite_ix = 0;
-      size_t output_count_number_tests = 0;
+
+      // collect all the tests
+      std::vector<autoparallel_testcase> tasks{};
 
       for(const auto &[info, suite] : all_suites_) {
         
@@ -202,129 +385,121 @@ namespace tipi::cute_ext {
         }
         
         for(const auto &test_case : suite) {
-          
+
+          // no need to spawn for disabled/skipped tests...
           if(filter_unit_enabled(test_case.name())) {
-            maniac_suites.at(next_msuite_ix++).push_back(test_case);
-            output_count_number_tests++;
-            if(next_msuite_ix >= maniac_strands) {
-              next_msuite_ix = 0;
-            }
+            tasks.emplace_back(base_process_cmd, info, test_case.name(), test_case);
           }
-
         }
-      }        
-      
+      }
 
-        
-      struct maniac_proc {
-        bool done;
-        bool success;
-        std::shared_ptr<TinyProcessLib::Process> process_ptr;
-        std::shared_ptr<std::stringstream> out_ss_ptr;
+      /** HEPLPERS for the actual processing below */
+      auto next_task_it = [&]() {
+        return std::find_if(tasks.begin(), tasks.end(), [](auto &t) { return t.was_started() == false; });
+      };
 
-        maniac_proc(const std::string& command, const cute::suite& suite) 
-          : done(false)
-          , success(false)
-          , out_ss_ptr{std::make_shared<std::stringstream>()}
-        {
-          std::stringstream cmd_ss{};
+      auto tasks_remaining = [&]() {
+        auto all_done = std::all_of(tasks.begin(), tasks.end(), [](auto &t) { return t.is_done(); });
+        auto all_started = std::all_of(tasks.begin(), tasks.end(), [](auto &t) { return t.was_started(); });
+        return !all_done || !all_started;
+      };
 
-          #if defined(_WIN32) && !defined(MSYS_PROCESS_USE_SH)
-          cmd_ss << "cmd /c ";
-          #endif
+      std::vector<std::string> suites_started{};
+      auto mark_suite_started = [&](const std::string& suite_name) {
+        if(std::find(suites_started.begin(), suites_started.end(), suite_name) != suites_started.end()) {
 
-          cmd_ss << command << " --maniac-list-stdin";
+          auto suite = all_suites_[suite_name];
+          listener.begin(suite, suite_name.c_str(), suite.size());
 
-          auto loc_ss_ptr = out_ss_ptr;
-
-          process_ptr = std::make_shared<TinyProcessLib::Process>(
-            cmd_ss.str(), 
-            "", /* env */
-            [loc_ss_ptr](const char *bytes, size_t n) {
-              auto &out = *loc_ss_ptr;
-              out << std::string(bytes, n);
-            },
-            nullptr,  /* no explicit stderr handling in this case */
-            true      /* open stdin */
-          );
-
-          for(auto &test : suite) {
-            process_ptr->write(test.name());
-            process_ptr->write(";");
-          }
-
-          process_ptr->write("\n");
-          process_ptr->close_stdin();
         }
       };
+
+      set_render_options(listener, true, true, true, false);
+      
+      std::atomic<size_t> tests_failed = 0;
+
+      auto start_next = [&]() {
+        auto nextit = next_task_it();
+
+        if(nextit != tasks.end()) {
+          nextit->start([&](const auto &task) {
+
+            auto urr = task.get_run_unit_result();
+
+            if(urr == run_unit_result::passed || urr == run_unit_result::skipped) {
+              listener.success(task.get_cute_unit(), "");
+            }
+            else if(urr == run_unit_result::failed) {
+              tests_failed++;
+              listener.failure(task.get_cute_unit(), task.get_output().c_str());
+            }
+            else {
+              tests_failed++;
+              listener.error(task.get_cute_unit(), task.get_output().c_str());
+            }
+          });
+
+          auto suite_name = nextit->get_suite_name();
+          mark_suite_started(suite_name);
+
+          const cute::suite& suite = all_suites_.at(suite_name);
+          listener.begin(suite, suite_name.c_str(), suite.size());
+          listener.start(nextit->get_cute_unit(), suite);
+          return true;
+        }
+
+        return false;
+      };
+
+      auto count_running = [&]() {
+        return std::count_if(tasks.begin(), tasks.end(), [](auto &t) { return t.is_running() == true; });
+      };
+
+      auto suite_finished = [&](const std::string& suite) {
+        size_t count_tests  = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite; });
+        size_t count_done   = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite && t.is_done(); });
+        return count_tests == count_done;
+      };
+
+      std::vector<std::string> suites_printed{};
       
 
-      std::vector<maniac_proc> processes{};
+      auto was_suite_printed = [&](const std::string suite_name) {
+        return std::find(suites_printed.begin(), suites_printed.end(), suite_name) != suites_printed.end();
+      };
 
-      std::stringstream cmd_ss{};
-      {
-        cmd_ss << program_exe_path;
+      auto all_suites_printed = [&]() {
+        return suites_printed.size() == all_suites_.size();
+      };
 
-        const auto filter_test_case_arg = args_.get<std::string>("filter", "");
-        if(filter_test_case_arg.empty() == false) {
-          cmd_ss << " --filter=\"" << filter_test_case_arg << "\"";
-        }
+      auto print_suite = [&](const auto& suite, const std::string& suite_name) {
+        suites_printed.push_back(suite_name);        
+        listener.end(suite, suite_name.c_str());
+      };
 
-        const auto skipped_as_pass = args_.get<bool>("skipped-as-pass", false);
-        if(skipped_as_pass) {
-          cmd_ss << "--skipped-as-pass";
-        }
 
-        const auto listener_arg = args_.get<std::string>("listener", "");
-        if(listener_arg.empty() == false) {
-          cmd_ss << " --listener=\"" << listener_arg << "\"";
-        }
-      }
+      /** The actual running thing */
+      while(tasks_remaining() && !all_suites_printed()) {
 
-      size_t output_count_suites = 0;
-      for(auto &msuite : maniac_suites) {
+        // start as many tasks as we have "slots"
+        while(tasks_remaining() && count_running() < opt_maniac_strands_arg) {
+          start_next();
+        }        
 
-        if(msuite.size() == 0) {
-          continue;
-        }
-
-        processes.push_back({ cmd_ss.str(), msuite });
-        output_count_suites++;
-      }
-
-      // run and output stuff
-      auto &out = get_output();
-      out << get_maniac_output_wrapper_start(output_count_number_tests);
-
-      bool success = true;
-      auto ts_start = std::chrono::steady_clock::now();
-
-      while(std::any_of(processes.begin(), processes.end(), [](auto &e) { return e.done == false; })) {
-        for(maniac_proc& sd : processes) {
-
-          if(!sd.done && sd.process_ptr) {
-            int exit_code;
-
-            if(sd.process_ptr->try_get_exit_status(exit_code)) {
-              sd.done = true;
-              sd.success = (exit_code == 0);
-              out << sd.out_ss_ptr->str();                
-
-              success = success && sd.success;                
-            }
+        // collect the results until all tasks of a suite are finished
+        for(const auto &[suite_name, suite] : all_suites_) {
+          
+          if(suite_finished(suite_name) && !was_suite_printed(suite_name)) {
+            print_suite(suite, suite_name);
           }
         }
+
+        std::this_thread::sleep_for(10ms);
       }
 
-      auto ts_end = std::chrono::steady_clock::now();
+      //std::exit(0);
 
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(ts_end - ts_start);
-      size_t output_count_suites_success = std::count_if(processes.begin(), processes.end(), [](auto &sd) { return sd.success == true; });
-      size_t output_count_suites_failed  = std::count_if(processes.begin(), processes.end(), [](auto &sd) { return sd.success == false; });
-
-      out << get_maniac_output_wrapper_end(output_count_suites, output_count_suites_success, output_count_suites_failed, duration);
-
-      return success;
+      return tests_failed == 0;
     }
 
     bool cmd_run_base() {
@@ -353,20 +528,20 @@ namespace tipi::cute_ext {
       return *out_stream_;
     }
 
-    wrapper(int argc, char *argv[], bool exit_on_destruction = true)
+    /*wrapper(int argc, char *argv[], bool exit_on_destruction = true)
       : wrapper(argc, argv, detail::dummy_null_listener, exit_on_destruction)
     {
       use_user_defined_listener_ = false;
-    }
+    }*/
 
-    wrapper(int argc, char *argv[], User_Supplied_Listener& user_defined_listener, bool exit_on_destruction = true)
-      : args_(argc, argv)
-      , use_user_defined_listener_(true)
-      , user_defined_listener_(user_defined_listener)
+    wrapper(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true)
+      : runner_listener_(listener)
+      , args_(argc, argv)
       , opt_exit_on_destruction(exit_on_destruction)
     {
-      program_exe_path = std::string(argv[0]);
+      program_exe_path        = std::string(argv[0]);
 
+      opt_listener            = args_.get<std::string>("listener", "modern");
       opt_filter_unit_value   = args_.get<std::string>("filter", "");
       opt_filter_suite_value  = args_.get<std::string>("filter-suite", "");
       opt_maniac_strands_arg  = args_.get<size_t>("j", std::thread::hardware_concurrency() + 1);
@@ -374,7 +549,8 @@ namespace tipi::cute_ext {
       opt_auto_concurrent_run = args_.get<bool>("parallel", false);
       opt_list_testcases      = args_.get<bool>("list-testcases") || args_.get<bool>("ltc");
       opt_show_help           = args_.get<bool>("help", false) || args_.get<bool>("h", false) || args_.get<bool>("?", false);
-      opt_skipped_as_pass     = args_.get<bool>("skipped-as-pass", false);
+      opt_skipped_as_pass     = args_.get<bool>("skipped-as-pass", false);      
+      opt_force_cli_listener  = args_.get<bool>("force-listener", false);   
 
       opt_auto_concurrent_tc_set    = args_.get<bool>("parallel-suite", false) && args_.get<bool>("parallel-unit", false);
       opt_auto_concurrent_suite     = args_.get<std::string>("parallel-suite", "");
@@ -416,6 +592,10 @@ namespace tipi::cute_ext {
         process_cmd();
       }
 
+      if(force_destructor_exit_code.has_value()) {
+        std::exit(force_destructor_exit_code.value());
+      }
+/*
       if(file_out_ptr_ && file_out_ptr_->is_open()) {
         get_output() << std::flush; 
         file_out_ptr_->close();
@@ -427,7 +607,7 @@ namespace tipi::cute_ext {
         }
 
         std::exit(0);
-      }
+      }*/
     }
 
     size_t get_failure_count() {
@@ -441,10 +621,7 @@ namespace tipi::cute_ext {
         std::exit(0);
       }
 
-
       if(opt_auto_concurrent_tc_set) {
-
-        std::cout << "[X] MANIAC MODE SINGLE TC: " << opt_auto_concurrent_suite << " -->" << opt_auto_concurrent_unit << std::endl;
         return cmd_run_base();
       }
 
@@ -452,7 +629,37 @@ namespace tipi::cute_ext {
       if(opt_run_explicit || (!opt_run_explicit && !opt_list_testcases) ) {
 
         if(opt_auto_concurrent_run) {
-          return cmd_maniac();
+
+          auto& output_stream = get_output();
+
+          if(!opt_force_cli_listener) {
+            auto wrapped = cute_listener_wrapper<RunnerListener>{&runner_listener_};
+            return cmd_autoparallel<>(wrapped);
+          }
+          else if(opt_listener == "ide") { 
+            cute::ide_listener<> listener(output_stream); 
+            auto wrapped = cute_listener_wrapper(&listener);
+            return cmd_autoparallel<>(wrapped);
+          }
+          else if(opt_listener == "classic") {
+            cute::ostream_listener<> listener(output_stream);
+            auto wrapped = cute_listener_wrapper(&listener);
+            return cmd_autoparallel<>(wrapped);
+          }
+          else if(opt_listener == "xml"){
+            cute::xml_listener<> listener(output_stream);
+            auto wrapped = cute_listener_wrapper(&listener);
+            return cmd_autoparallel<>(wrapped);
+          }
+          else if(opt_listener == "modern" ||true){        
+            cute_ext::parallel_listener<> listener(output_stream);
+            return cmd_autoparallel<>(listener);
+          }
+          else {
+            std::stringstream ss_err{};
+            ss_err << "Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'classic', 'ide', 'xml')";
+            throw std::runtime_error(ss_err.str());
+          }
         }      
 
         return cmd_run_base();;
@@ -483,11 +690,15 @@ namespace tipi::cute_ext {
         register_suite(suite, info);
     }
 
-    template <typename Listener=cute::null_listener>
+
+    template <typename Listener=cute_ext::parallel_listener>
     bool run_templated(Listener & listener, const std::unordered_map<std::string, cute::suite> &suites) {
 
       auto filter_unit_enabled = make_filter_fn(opt_filter_unit_value);
       auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
+
+      // if we are in concurrent / parallel mode, disable all funny rendering
+      set_render_options(listener, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set);
 
       auto run_unit = [&](const cute::test& t) {
 
@@ -496,32 +707,39 @@ namespace tipi::cute_ext {
             listener.start(t);
             listener.success(t, "SKIPPED");
           }
-          return true;
+          return run_unit_result::skipped;
         }
 
         if(opt_auto_concurrent_tc_set && t.name() != opt_auto_concurrent_unit) {
-          return true;
+          return run_unit_result::skipped;
         }
+
+        run_unit_result result;
 
         try {          
           listener.start(t);          
           t();
           listener.success(t, "OK");
-          return true;
+          return run_unit_result::passed;
         } catch(const cute::test_failure & e){
           listener.failure(t, e);
+          result = run_unit_result::failed;
         } catch(const std::exception & exc){
           listener.error(t, cute::demangle(exc.what()).c_str());
+          result = run_unit_result::errored;
         } catch(std::string & s){
           listener.error(t, s.c_str());
+          result = run_unit_result::errored;
         } catch(const char *&cs) {
           listener.error(t, cs);
+          result = run_unit_result::errored;
         } catch(...) {
           listener.error(t, "unknown exception thrown");
+          result = run_unit_result::errored;
         }
 
-        test_exec_failures++;
-        return false;
+        
+        return result;
       };
 
       bool result = true;
@@ -530,17 +748,26 @@ namespace tipi::cute_ext {
 
         if(filter_suite_enabled(suite_name)) {
 
-          if(!opt_auto_concurrent_tc_set) {
-            listener.begin(suite, suite_name.c_str(), suite.size());
-          }          
+          listener.begin(suite, suite_name.c_str(), suite.size());
 
           for(auto &test : suite) {
-            result &= run_unit(test);
+
+            auto unit_result = run_unit(test);
+
+            if(unit_result == run_unit_result::passed || unit_result == run_unit_result::skipped) {
+              result &= true;
+            }
+            else {
+              test_exec_failures++;
+              result &= false;
+            }
+
+            if(opt_auto_concurrent_tc_set && unit_result != run_unit_result::skipped) {
+              force_destructor_exit_code = run_unit_result_to_ret(unit_result);
+            }
           }
           
-          if(!opt_auto_concurrent_tc_set) {
-            listener.end(suite, suite_name.c_str());
-          }
+          listener.end(suite, suite_name.c_str());
         }
         else {
 
@@ -557,31 +784,32 @@ namespace tipi::cute_ext {
 
     bool run_suites(const std::unordered_map<std::string, cute::suite> &suites, std::ostream& output_stream) {
       
-      const auto listener_arg = args_.get<std::string>("listener", "modern");
-
-
-      if(use_user_defined_listener_) {
-        return run_templated<>(user_defined_listener_, suites);
+      if(!opt_force_cli_listener) {
+        auto wrapped = cute_listener_wrapper(&runner_listener_);
+        return run_templated<>(wrapped, suites);
       }
-      else if(listener_arg == "ide") { 
+      else if(opt_listener == "ide") { 
         cute::ide_listener<> listener(output_stream); 
-        return run_templated<>(listener, suites);
+        auto wrapped = cute_listener_wrapper(&listener);
+        return run_templated<>(wrapped, suites);
       }
-      else if(listener_arg == "classic") {
+      else if(opt_listener == "classic") {
         cute::ostream_listener<> listener(output_stream);
-        return run_templated<>(listener, suites);
+        auto wrapped = cute_listener_wrapper(&listener);
+        return run_templated<>(wrapped, suites);
       }
-      else if(listener_arg == "xml"){
-        cute_ext::modern_xml_listener<> listener(output_stream, !opt_auto_concurrent_tc_set);
-        return run_templated<>(listener, suites);
+      else if(opt_listener == "xml"){        
+        cute::xml_listener<> listener(output_stream);
+        auto wrapped = cute_listener_wrapper(&listener);
+        return run_templated<>(wrapped, suites);
       }
-      else if(listener_arg == "modern"){        
-        cute_ext::modern_listener<> listener(!opt_auto_concurrent_tc_set, output_stream);
+      else if(opt_listener == "modern"){
+        cute_ext::parallel_listener<> listener(output_stream);
         return run_templated<>(listener, suites);
       }
       else {
         std::stringstream ss_err{};
-        ss_err << "Unknown --listener option: " << listener_arg << " (valid options are: 'modern', 'classic', 'ide', 'xml')";
+        ss_err << "XXX Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'classic', 'ide', 'xml')";
         throw std::runtime_error(ss_err.str());
       }
     }
