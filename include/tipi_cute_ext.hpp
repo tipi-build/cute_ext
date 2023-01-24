@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <map>
 #include <chrono>
 #include <string>
@@ -37,31 +38,30 @@ namespace tipi::cute_ext {
   namespace detail {
     cute::null_listener dummy_null_listener{};
 
-  }
+    enum run_unit_result {
+      passed,
+      failed,   
+      errored,
+      skipped,
+      unknown
+    };
 
-  enum run_unit_result {
-    passed,
-    failed,   
-    errored,
-    skipped,
-    unknown
-  };
+    int run_unit_result_to_ret(const run_unit_result val) {
+      if(val == run_unit_result::passed) return 0;
+      else if(val == run_unit_result::failed) return 1;
+      else if(val == run_unit_result::errored) return 2;
+      else if(val == run_unit_result::skipped) return 3;
+      
+      return 8;
+    }
 
-  int run_unit_result_to_ret(const run_unit_result val) {
-    if(val == run_unit_result::passed) return 0;
-    else if(val == run_unit_result::failed) return 1;
-    else if(val == run_unit_result::errored) return 2;
-    else if(val == run_unit_result::skipped) return 3;
-    
-    return 8;
-  }
-
-  static run_unit_result ret_to_run_unit_result(const int val) {
-    if(val == 0) return run_unit_result::passed;
-    else if(val == 1) return run_unit_result::failed;
-    else if(val == 2) return run_unit_result::errored;
-    else if(val == 3) return run_unit_result::skipped;
-    return run_unit_result::unknown;
+    static run_unit_result ret_to_run_unit_result(const int val) {
+      if(val == 0) return run_unit_result::passed;
+      else if(val == 1) return run_unit_result::failed;
+      else if(val == 2) return run_unit_result::errored;
+      else if(val == 3) return run_unit_result::skipped;
+      return run_unit_result::unknown;
+    }  
   }
 
   template <typename RunnerListener = cute::null_listener>
@@ -69,7 +69,6 @@ namespace tipi::cute_ext {
   private:
 
     RunnerListener& runner_listener_{};
-
     
     bool opt_run_explicit = false;
     bool opt_show_help = false;
@@ -242,13 +241,13 @@ namespace tipi::cute_ext {
       bool is_done() const { return done_; }
       bool was_success() const { return success_; }
 
-      run_unit_result get_run_unit_result() const {
+      tipi::cute_ext::detail::run_unit_result get_run_unit_result() const {
         auto rc = return_code();
         if(rc.has_value()) {
-          return ret_to_run_unit_result(rc.value());
+          return detail::ret_to_run_unit_result(rc.value());
         }
 
-        return run_unit_result::unknown;
+        return tipi::cute_ext::detail::run_unit_result::unknown;
       }
 
       std::optional<int> return_code() const {
@@ -271,7 +270,7 @@ namespace tipi::cute_ext {
         cmd_ss << "cmd /c ";
         #endif
 
-        cmd_ss << process_base_cmd_ << " --parallel-suite \"" << suite_ << "\" --parallel-unit \"" << unit_ << "\"";
+        cmd_ss << process_base_cmd_ << " --parallel-suite=\"" << suite_ << "\" --parallel-unit=\"" << unit_ << "\"";
 
         auto loc_ss_ptr = out_ss_ptr_;
 
@@ -364,11 +363,11 @@ namespace tipi::cute_ext {
         cmd_ss << program_exe_path;
 
         if(opt_listener.empty() == false) {
-          cmd_ss << " --listener=" << opt_listener << "";
+        cmd_ss << " --listener=\"" << opt_listener << "\"";
         }
 
         if(opt_force_cli_listener) {
-          cmd_ss << " --force-listener";
+          cmd_ss << " --force-listener ";
         }
 
         base_process_cmd = cmd_ss.str();
@@ -423,15 +422,17 @@ namespace tipi::cute_ext {
         auto nextit = next_task_it();
 
         if(nextit != tasks.end()) {
+          tests_running++;
+
           nextit->start([&](const auto &task) {
 
             auto urr = task.get_run_unit_result();
-            tests_running--;
+            
 
-            if(urr == run_unit_result::passed || urr == run_unit_result::skipped) {
+            if(urr == detail::run_unit_result::passed || urr == detail::run_unit_result::skipped) {
               listener.success(task.get_cute_unit(), "");
             }
-            else if(urr == run_unit_result::failed) {
+            else if(urr == detail::run_unit_result::failed) {
               tests_failed++;
               listener.failure(task.get_cute_unit(), task.get_output().c_str());
             }
@@ -439,9 +440,9 @@ namespace tipi::cute_ext {
               tests_failed++;
               listener.error(task.get_cute_unit(), task.get_output().c_str());
             }
-          });
 
-          tests_running++;
+            tests_running--;
+          });          
 
           auto suite_name = nextit->get_suite_name();
           mark_suite_started(suite_name);
@@ -484,11 +485,13 @@ namespace tipi::cute_ext {
 
       /** The actual running thing */
       listener.render_preamble();
+      
+      size_t strand_limit = ( opt_maniac_strands_arg < 1024) ? opt_maniac_strands_arg : 1024;
 
       while(tasks_remaining() && !all_suites_printed()) {
 
         // start as many tasks as we have "slots"
-        while(tasks_remaining() && tests_running < opt_maniac_strands_arg) {
+        while(tasks_remaining() && tests_running < strand_limit) {
           start_next();
         }        
 
@@ -499,8 +502,6 @@ namespace tipi::cute_ext {
             print_suite(suite, suite_name);
           }
         }
-
-        std::this_thread::sleep_for(10ms);
       }
 
       listener.render_end();
@@ -558,7 +559,7 @@ namespace tipi::cute_ext {
       opt_skipped_as_pass     = args_.get<bool>("skipped-as-pass", false);      
       opt_force_cli_listener  = args_.get<bool>("force-listener", false);   
 
-      opt_auto_concurrent_tc_set    = args_.get<bool>("parallel-suite", false) && args_.get<bool>("parallel-unit", false);
+      opt_auto_concurrent_tc_set    = args_.get<bool>("parallel-suite", false) || args_.get<bool>("parallel-unit", false);
       opt_auto_concurrent_suite     = args_.get<std::string>("parallel-suite", "");
       opt_auto_concurrent_unit      = args_.get<std::string>("parallel-unit", "");
 
@@ -652,7 +653,7 @@ namespace tipi::cute_ext {
             auto wrapped = cute_listener_wrapper(&listener);
             return cmd_autoparallel<>(wrapped);
           }
-          /* /!\ exe BOMB here?
+          /* /!\ exe BOMB here? */
           else if(opt_listener == "classicxml"){
             cute::xml_listener<> listener(output_stream);
             auto wrapped = cute_listener_wrapper(&listener);
@@ -661,7 +662,7 @@ namespace tipi::cute_ext {
           else if(opt_listener == "modernxml"){
             cute_ext::modern_xml_listener<> listener(output_stream);
             return cmd_autoparallel<>(listener);
-          }*/
+          } //*/
           else if(opt_listener == "modern"){        
             cute_ext::modern_listener<> listener(output_stream);
             return cmd_autoparallel<>(listener);
@@ -675,32 +676,45 @@ namespace tipi::cute_ext {
 
         return cmd_run_base();;
       }
+
+      return true;
     }
     
-    void register_suite(const cute::suite& suite, const std::string& info) {
+    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite cute::suite
+    /// @param info name
+    void register_suite(const cute::suite& suite, const std::string& name) {
       if(opt_auto_concurrent_run || (opt_list_testcases && !opt_run_explicit)) {
-        all_suites_.insert({ info, suite });
+        all_suites_.insert({ name, suite });
       }
-      else {
-        
+      else {        
         // in single-TC mode (as parallel mode child process) we skip every suite that is not the
         // expected one
-        if(!opt_auto_concurrent_tc_set || info == opt_auto_concurrent_suite) {
+        if(!opt_auto_concurrent_tc_set || name == opt_auto_concurrent_suite) {
 
           all_suites_ = std::unordered_map<std::string, cute::suite>{
-            { info, suite }
+            { name, suite }
           };
 
           process_cmd();
-
         }
       }     
     }
 
-    void register_suite(const cute::suite&& suite, const std::string& info) {
-        register_suite(suite, info);
-    }
+    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite cute::suite
+    /// @param info name
+    void register_suite(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
 
+    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite cute::suite
+    /// @param info name
+    void operator()(const cute::suite& suite, const std::string& name) { register_suite(suite, name); }
+
+    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite cute::suite
+    /// @param info name
+    void operator()(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
 
     template <typename Listener=cute_ext::parallel_listener>
     bool run_templated(Listener & listener, const std::unordered_map<std::string, cute::suite> &suites) {
@@ -718,35 +732,35 @@ namespace tipi::cute_ext {
             listener.start(t);
             listener.success(t, "SKIPPED");
           }
-          return run_unit_result::skipped;
+          return detail::run_unit_result::skipped;
         }
 
         if(opt_auto_concurrent_tc_set && t.name() != opt_auto_concurrent_unit) {
-          return run_unit_result::skipped;
+          return detail::run_unit_result::skipped;
         }
 
-        run_unit_result result;
+        detail::run_unit_result result;
 
         try {          
           listener.start(t);          
           t();
           listener.success(t, "OK");
-          return run_unit_result::passed;
+          return detail::run_unit_result::passed;
         } catch(const cute::test_failure & e){
           listener.failure(t, e);
-          result = run_unit_result::failed;
+          result = detail::run_unit_result::failed;
         } catch(const std::exception & exc){
           listener.error(t, cute::demangle(exc.what()).c_str());
-          result = run_unit_result::errored;
+          result = detail::run_unit_result::errored;
         } catch(std::string & s){
           listener.error(t, s.c_str());
-          result = run_unit_result::errored;
+          result = detail::run_unit_result::errored;
         } catch(const char *&cs) {
           listener.error(t, cs);
-          result = run_unit_result::errored;
+          result = detail::run_unit_result::errored;
         } catch(...) {
           listener.error(t, "unknown exception thrown");
-          result = run_unit_result::errored;
+          result = detail::run_unit_result::errored;
         }
 
         
@@ -765,7 +779,7 @@ namespace tipi::cute_ext {
 
             auto unit_result = run_unit(test);
 
-            if(unit_result == run_unit_result::passed || unit_result == run_unit_result::skipped) {
+            if(unit_result == detail::run_unit_result::passed || unit_result == detail::run_unit_result::skipped) {
               result &= true;
             }
             else {
@@ -773,7 +787,7 @@ namespace tipi::cute_ext {
               result &= false;
             }
 
-            if(opt_auto_concurrent_tc_set && unit_result != run_unit_result::skipped) {
+            if(opt_auto_concurrent_tc_set && unit_result != detail::run_unit_result::skipped) {
               force_destructor_exit_code = run_unit_result_to_ret(unit_result);
             }
           }
@@ -809,16 +823,16 @@ namespace tipi::cute_ext {
         auto wrapped = cute_listener_wrapper(&listener);
         return run_templated<>(wrapped, suites);
       }
-      /* // /!\ exe BOMB here?
+      //* // /!\ exe BOMB here?
       else if(opt_listener == "classicxml"){
         cute::xml_listener<> listener(output_stream);
         auto wrapped = cute_listener_wrapper(&listener);
-        return cmd_autoparallel<>(wrapped);
+        return run_templated<>(wrapped, suites);
       }
       else if(opt_listener == "modernxml"){
         cute_ext::modern_xml_listener<> listener(output_stream);
-        return cmd_autoparallel<>(listener);
-      }*/
+        return run_templated<>(listener, suites);
+      } //*/
       else if(opt_listener == "modern"){
         cute_ext::modern_listener<> listener(output_stream);
         return run_templated<>(listener, suites);
@@ -835,4 +849,17 @@ namespace tipi::cute_ext {
     }
 
   };    
+
+  /// @brief Create a new cute_ext runner
+  /// @tparam RunnerListener 
+  /// @param listener
+  /// @param argc 
+  /// @param argv 
+  /// @param exit_on_destruction 
+  /// @return 
+  template <typename RunnerListener = cute::null_listener>
+  inline wrapper<> makeRunner(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true) {
+    return wrapper<>(listener, argc, argv, exit_on_destruction);
+  }
+
 }

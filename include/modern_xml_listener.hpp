@@ -48,7 +48,7 @@ namespace tipi::cute_ext
     void virtual render_preamble() override {
       if(render_listener_info) {
         out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            << "<testsuite>\n";
+            << "<testsuites>\n";
       }
     }
 
@@ -78,7 +78,7 @@ namespace tipi::cute_ext
             << INDENT << INDENT << " - total user time:     " << user_total_time_ms.count() << "s\n"
             << INDENT << "-->\n";
 
-        out << "</testsuite>\n";
+        out << "</testsuites>\n";
       }
     }
 

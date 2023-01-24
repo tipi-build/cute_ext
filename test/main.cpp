@@ -64,10 +64,11 @@ int main(int argc, char *argv[]) {
     tipi::cute_ext::util::enable_vt100_support_windows10();    
 
     cute::xml_file_opener xmlfile(argc, argv);
-    cute::xml_listener < cute::ide_listener<> > lis{xmlfile.out};    
+    //tipi::cute_ext::modern_xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};    
     //tipi::cute_ext::parallel_listener<> lis{};
-    //cute::ide_listener<> lis{};    
-	tipi::cute_ext::wrapper wrapper(lis, argc, argv, false);
+    cute::ide_listener<> lis{std::cout};    
+	auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
+    //tipi::cute_ext::wrapper wrapper(lis, argc, argv, false);
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
@@ -104,11 +105,11 @@ int main(int argc, char *argv[]) {
 
     s3 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s3_201");
     
-    wrapper.register_suite(s1, "Suite 1");
-    wrapper.register_suite(s2, "Suite 2");
-    wrapper.register_suite(s3, "Suite 3");
-    wrapper.register_suite(make_suite_ReadOnlyIniFileTest(), "Temp suite");
-    wrapper.register_suite(make_suite(), "External suite");    
+    runner(s1, "Suite 1");
+    runner(s2, "Suite 2");
+    runner(s3, "Suite 3");
+    runner(make_suite_ReadOnlyIniFileTest(), "Temp suite");
+    runner(make_suite(), "External suite");    
 
     /*try {
         wrapper.process_cmd();
@@ -120,7 +121,7 @@ int main(int argc, char *argv[]) {
 
   
 
-    if(wrapper.get_failure_count() > 0) {
+    if(runner.get_failure_count() > 0) {
         return 1;
     }
     
