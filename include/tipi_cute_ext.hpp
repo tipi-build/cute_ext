@@ -465,10 +465,6 @@ namespace tipi::cute_ext {
         return false;
       };
 
-      /*auto count_running = [&]() {
-        return tests_running;
-      };*/
-
       auto suite_finished = [&](const std::string& suite) {
         size_t count_tests  = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite; });
         size_t count_done   = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite && t.is_done(); });
@@ -514,8 +510,6 @@ namespace tipi::cute_ext {
         }
       }
 
-      listener.render_end();
-
       if(force_destructor_exit_code.value_or(0) == 0) { 
         force_destructor_exit_code = (tests_failed == 0) ? 0 : 1;
       }
@@ -534,11 +528,14 @@ namespace tipi::cute_ext {
         success = false;
       }
 
-      if(!success) {
-        force_destructor_exit_code = 1;  
+      if(!success) { 
         test_exec_failures++;
       }
 
+      if(!success && !force_destructor_exit_code.has_value()) {
+        force_destructor_exit_code = 1;
+      }
+        
       return success;        
     }
 
@@ -616,7 +613,7 @@ namespace tipi::cute_ext {
       if(!opt_force_cli_listener) {
         listener_render_end(runner_listener_);
       }
-
+      
       if(force_destructor_exit_code.has_value()) {
         std::exit(force_destructor_exit_code.value());
       }
@@ -752,7 +749,7 @@ namespace tipi::cute_ext {
       auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
 
       // if we are in concurrent / parallel mode, disable all funny rendering
-      util::set_render_options(listener, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set);
+      util::set_render_options(listener, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, opt_auto_concurrent_tc_set);
 
       auto run_unit = [&](const cute::test& t) {
 

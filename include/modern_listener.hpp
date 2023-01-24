@@ -54,7 +54,7 @@ namespace tipi::cute_ext
     void virtual render_end() override {
       using namespace std::chrono_literals;
 
-      if(ParallelListener::render_listener_info) {
+      if(this->render_listener_info) {
         double total_time_ms = 0;
 
         for(auto &[test, test_ptr] : this->tests) {
