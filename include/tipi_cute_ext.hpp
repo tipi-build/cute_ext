@@ -516,8 +516,10 @@ namespace tipi::cute_ext {
 
       listener.render_end();
 
-      force_destructor_exit_code = (tests_failed == 0) ? 0 : 1;
-
+      if(force_destructor_exit_code.value_or(0) == 0) { 
+        force_destructor_exit_code = (tests_failed == 0) ? 0 : 1;
+      }
+      
       return tests_failed == 0;
     }
 
