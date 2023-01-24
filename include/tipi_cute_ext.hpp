@@ -324,30 +324,7 @@ namespace tipi::cute_ext {
       std::shared_ptr<std::thread> process_thread_ptr;
     };
 
-    // SFINAE tester
-    template <typename Listener>
-    class has_set_render_options
-    {
-    private:
-        typedef char YesType[1];
-        typedef char NoType[2];
-        template <typename Listener> static YesType& test( decltype(&Listener::set_render_options) ) ;
-        template <typename Listener> static NoType& test(...);
-    public:
-        enum { value = sizeof(test<Listener>(0)) == sizeof(YesType) };
-    };
 
-    template<typename FnListener> 
-    typename std::enable_if<has_set_render_options<FnListener>::value, void>::type
-    set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
-      listener.set_render_options(render_listener_info, render_suite_info, render_test_info, render_immediate_mode);
-    }
-
-    template<typename FnListener> 
-    typename std::enable_if<!has_set_render_options<FnListener>::value, void>::type
-    set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
-      // we don't have any setting to apply - this one doesn't have the set_render_options() method...
-    }
 
     template <typename Listener=cute::null_listener>
     bool cmd_autoparallel(Listener & listener) {
@@ -413,7 +390,7 @@ namespace tipi::cute_ext {
         }
       };
 
-      set_render_options(listener, true, true, true, false);
+      util::set_render_options(listener, true, true, true, false);
       
       std::atomic<size_t> tests_failed = 0;
       std::atomic<size_t> tests_running = 0;
@@ -640,6 +617,14 @@ namespace tipi::cute_ext {
           auto& output_stream = get_output();
 
           if(!opt_force_cli_listener) {
+
+            if (util::has_set_render_options<RunnerListener>(runner_listener_)) {
+              return cmd_autoparallel<>(runner_listener_);
+            }
+            else {
+              auto wrapped = cute_listener_wrapper(&runner_listener_);
+              return cmd_autoparallel<>(wrapped);
+            }
             auto wrapped = cute_listener_wrapper<RunnerListener>{&runner_listener_};
             return cmd_autoparallel<>(wrapped);
           }
@@ -723,7 +708,7 @@ namespace tipi::cute_ext {
       auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
 
       // if we are in concurrent / parallel mode, disable all funny rendering
-      set_render_options(listener, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set);
+      util::set_render_options(listener, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set, !opt_auto_concurrent_tc_set);
 
       auto run_unit = [&](const cute::test& t) {
 
@@ -810,8 +795,13 @@ namespace tipi::cute_ext {
     bool run_suites(const std::unordered_map<std::string, cute::suite> &suites, std::ostream& output_stream) {
       
       if(!opt_force_cli_listener) {
-        auto wrapped = cute_listener_wrapper(&runner_listener_);
-        return run_templated<>(wrapped, suites);
+        if (util::has_set_render_options<RunnerListener>(runner_listener_)) {
+          return run_templated<>(runner_listener_, suites);
+        }
+        else {
+          auto wrapped = cute_listener_wrapper(&runner_listener_);
+          return run_templated<>(wrapped, suites);
+        }
       }
       else if(opt_listener == "ide") { 
         cute::ide_listener<> listener(output_stream); 
@@ -858,8 +848,8 @@ namespace tipi::cute_ext {
   /// @param exit_on_destruction 
   /// @return 
   template <typename RunnerListener = cute::null_listener>
-  inline wrapper<> makeRunner(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true) {
-    return wrapper<>(listener, argc, argv, exit_on_destruction);
+  inline wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true) {
+    return wrapper<RunnerListener>(listener, argc, argv, exit_on_destruction);
   }
 
 }

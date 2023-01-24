@@ -53,7 +53,7 @@ namespace tipi::cute_ext::util
 		#MemberFunctionName,\
     ctxname)
 
-   inline bool tty_is_vscode_term() {
+  inline bool tty_is_vscode_term() {
     char* tmp = std::getenv("TERM_PROGRAM");
 
     if(tmp == NULL) {
@@ -120,5 +120,42 @@ namespace tipi::cute_ext::util
     #else
       /* does noting on unixes */
     #endif
+  }
+
+  // SFINAE tester
+  template <typename Listener>
+  class has_set_render_options_t
+  {
+  private:
+      typedef char YesType[1];
+      typedef char NoType[2];
+      template <typename Listener> static YesType& test( decltype(&Listener::set_render_options) );
+      template <typename Listener> static NoType& test(...);
+  public:
+      enum { value = sizeof(test<Listener>(0)) == sizeof(YesType) };
+  };
+
+  template<typename FnListener> 
+  typename std::enable_if<has_set_render_options_t<FnListener>::value, void>::type
+  set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
+    listener.set_render_options(render_listener_info, render_suite_info, render_test_info, render_immediate_mode);
+  }
+
+  template<typename FnListener> 
+  typename std::enable_if<!has_set_render_options_t<FnListener>::value, void>::type
+  set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
+    // we don't have any setting to apply - this one doesn't have the set_render_options() method...
+  }
+
+  template<typename FnListener> 
+  typename std::enable_if<has_set_render_options_t<FnListener>::value, bool>::type
+  has_set_render_options(FnListener& listener) {
+    return true;
+  }
+
+  template<typename FnListener> 
+  typename std::enable_if<!has_set_render_options_t<FnListener>::value, bool>::type
+  has_set_render_options(FnListener& listener) {
+    return false;
   }
 }

@@ -2,11 +2,14 @@
 
 #include <cute/cute_listener.h>
 #include <cute/ide_listener.h>
+#include "util.hpp"
 
 namespace tipi::cute_ext
 {
   using namespace std::string_literals;
 
+  /// @brief Just a wrapper to decorate original cute::*_listener-s in a way all functions we expect are present
+  /// @tparam Listener 
   template <typename Listener=cute::null_listener>
   struct cute_listener_wrapper : public cute::null_listener
   {

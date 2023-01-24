@@ -65,10 +65,13 @@ int main(int argc, char *argv[]) {
 
     cute::xml_file_opener xmlfile(argc, argv);
     //tipi::cute_ext::modern_xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};    
-    //tipi::cute_ext::parallel_listener<> lis{};
-    cute::ide_listener<> lis{std::cout};    
-	auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
-    //tipi::cute_ext::wrapper wrapper(lis, argc, argv, false);
+    //tipi::cute_ext::modern_listener<> lis{};
+    tipi::cute_ext::modern_xml_listener<> lis{};
+    //cute::xml_listener<> lis{std::cout};    
+	//cute::ide_listener<> lis{std::cout};    
+	//cute::ostream_listener<> lis{std::cout};    
+	
+    auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
