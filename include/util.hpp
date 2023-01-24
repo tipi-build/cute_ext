@@ -129,8 +129,8 @@ namespace tipi::cute_ext::util
   private:
       typedef char YesType[1];
       typedef char NoType[2];
-      template <typename Listener> static YesType& test( decltype(&Listener::set_render_options) );
-      template <typename Listener> static NoType& test(...);
+      template <typename T> static YesType& test( decltype(&T::set_render_options) );
+      template <typename T> static NoType& test(...);
   public:
       enum { value = sizeof(test<Listener>(0)) == sizeof(YesType) };
   };

@@ -290,7 +290,7 @@ namespace tipi::cute_ext {
 
           int exit_code;
           while(!process_ptr->try_get_exit_status(exit_code)) {
-            std::this_thread::sleep_for(1ms);
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
           }
 
           running_ = false;
@@ -389,8 +389,6 @@ namespace tipi::cute_ext {
 
         }
       };
-
-      util::set_render_options(listener, true, true, true, false);
       
       std::atomic<size_t> tests_failed = 0;
       std::atomic<size_t> tests_running = 0;
@@ -461,6 +459,7 @@ namespace tipi::cute_ext {
 
 
       /** The actual running thing */
+      util::set_render_options(listener, true, true, true, false);
       listener.render_preamble();
       
       size_t strand_limit = ( opt_maniac_strands_arg < 1024) ? opt_maniac_strands_arg : 1024;
@@ -701,7 +700,7 @@ namespace tipi::cute_ext {
     /// @param info name
     void operator()(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
 
-    template <typename Listener=cute_ext::parallel_listener>
+    template <typename Listener=cute_ext::parallel_listener<>>
     bool run_templated(Listener & listener, const std::unordered_map<std::string, cute::suite> &suites) {
 
       auto filter_unit_enabled = make_filter_fn(opt_filter_unit_value);
@@ -754,6 +753,8 @@ namespace tipi::cute_ext {
 
       bool result = true;
 
+      listener.render_preamble();
+
       for(const auto &[suite_name, suite] : suites) {
 
         if(filter_suite_enabled(suite_name)) {
@@ -788,6 +789,8 @@ namespace tipi::cute_ext {
           }
         }        
       }
+
+      listener.render_end();
 
       return result;
     }

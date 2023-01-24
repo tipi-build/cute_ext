@@ -38,9 +38,9 @@ namespace tipi::cute_ext
 
     test_run(std::string name, std::shared_ptr<tipi::cute_ext::suite_run> suite_ptr)
       : name(name)
-      , suite_run(suite_ptr)
       , start(std::chrono::steady_clock::now())
       , outcome(test_run_outcome::Unknown)
+      , suite_run(suite_ptr)
     {
     }
 
@@ -70,8 +70,8 @@ namespace tipi::cute_ext
 
     suite_run(std::string name, size_t number_of_tests)
       : name(name)
-      , count_expected(number_of_tests)
       , start(std::chrono::steady_clock::now())
+      , count_expected(number_of_tests)
     {
 
     }
@@ -109,10 +109,10 @@ namespace tipi::cute_ext
   {
 
   protected:
-    bool render_listener_info;
-    bool render_suite_info;
-    bool render_test_info;
-    bool render_immediate_mode;
+    bool render_listener_info = true;
+    bool render_suite_info = true;
+    bool render_test_info = true;
+    bool render_immediate_mode = true;
 
     std::ostream &out;
 
@@ -133,11 +133,7 @@ namespace tipi::cute_ext
     
   public:
     parallel_listener(std::ostream &os = std::cerr)
-      : render_suite_info(true)
-      , render_test_info(true)
-      , render_listener_info(true)
-      , render_immediate_mode(true)
-      , out(os)
+      : out(os)
       , listener_start(std::chrono::steady_clock::now())
     {
     }

@@ -35,7 +35,7 @@ namespace tipi::cute_ext
 
     void virtual render_preamble() override {
 
-      if(render_listener_info) {
+      if(this->render_listener_info) {
 
         auto now = std::chrono::system_clock::now();
         std::time_t now_tm = std::chrono::system_clock::to_time_t(now);
@@ -43,64 +43,64 @@ namespace tipi::cute_ext
         std::string datetimenowstr{std::ctime(&now_tm)};
         datetimenowstr.pop_back();  // f*ck that last \n
 
-
-        out << "Awesome testing with " << termcolor::cyan << termcolor::bold << "tipi.build" << termcolor::reset << " + " << termcolor::yellow << "CUTE" << termcolor::reset << "\n"
+        this->out << "Awesome testing with " << termcolor::cyan << termcolor::bold << "tipi.build" << termcolor::reset << " + " << termcolor::yellow << "CUTE" << termcolor::reset << "\n"
             << " -> Starting test at: " << datetimenowstr << " - [" <<  now.time_since_epoch().count() << "]\n"
             << SEPARATOR_THIN
             << "\n";
 
       }
-
     }
 
     void virtual render_end() override {
       using namespace std::chrono_literals;
 
-      if(render_listener_info) {
+      if(ParallelListener::render_listener_info) {
         double total_time_ms = 0;
 
-        for(auto &[test, test_ptr] : tests) {
+        for(auto &[test, test_ptr] : this->tests) {
           total_time_ms += test_ptr->get_test_duration().count();         
         }
 
-        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(listener_end.value_or(std::chrono::steady_clock::now()) - listener_start);        
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);        
 
-        out << "\n"
-            << "Test stats: \n"
-            << " - suites executed:     " << suites.size() << "\n"
-            << " - suites passed:       " << suite_success << "\n";
+        this->out 
+          << "\n"
+          << "Test stats: \n"
+          << " - suites executed:     " << this->suites.size() << "\n"
+          << " - suites passed:       " << this->suite_success << "\n";
 
-        if(suite_failures > 0) { out << termcolor::red; }
-        out << " - suites failed:       " << suite_failures << "\n";
-        if(suite_failures > 0) { out << termcolor::reset; }
+        if(this->suite_failures > 0) { this->out << termcolor::red; }
+        this->out << " - suites failed:       " << this->suite_failures << "\n";
+        if(this->suite_failures > 0) { this->out << termcolor::reset; }
 
-        out << " - test cases executed: " << tests.size() << "\n"
-            << " - total test time:     " << total_time_ms << "s\n" 
-            << " - total user time:     " << user_total_time_ms.count() << "s\n"
-            << "\n";
+        this->out 
+          << " - test cases executed: " << this->tests.size() << "\n"
+          << " - total test time:     " << total_time_ms << "s\n" 
+          << " - total user time:     " << user_total_time_ms.count() << "s\n"
+          << "\n";
 
           
-        if(suite_failures == 0) {
-          out << termcolor::green << "✔  PASS";
+        if(this->suite_failures == 0) {
+          this->out << termcolor::green << "✔  PASS";
         } 
         else {
-          out << termcolor::red << "❌ FAILED";
+          this->out << termcolor::red << "❌ FAILED";
         }
 
-        out << termcolor::reset << std::endl;
+        this->out << termcolor::reset << std::endl;
       }
     }
 
     virtual void render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
-      if(render_test_info) {
+      if(this->render_test_info) {
         tco << " ▶ " << util::padRight(unit->name, 40, ' ') << std::flush;
       }        
     }
 
     virtual void render_test_case_start(const std::shared_ptr<test_run> &unit) override {
-      auto &tco = (render_immediate_mode) ? out : unit->out;
+      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
-      if(render_immediate_mode) {
+      if(this->render_immediate_mode) {
         render_test_case_header(tco, unit);
       }
     }
@@ -120,8 +120,13 @@ namespace tipi::cute_ext
         tco << termcolor::cyan << "O RUNNING/Unknown" << termcolor::reset;
       }
 
-      tco << "    (" << unit->get_test_duration().count() << "ms)";
-
+      if(unit->get_test_duration().count() < 1) {
+         tco << "    (" << unit->get_test_duration().count() * 100 << "ms)";
+      }
+      else {
+        tco << "    (" << unit->get_test_duration().count() << "s)";
+      }
+     
       if(unit->outcome == test_run_outcome::Fail) {
         tco << "\n"
             << SEPARATOR_THIN
@@ -147,10 +152,10 @@ namespace tipi::cute_ext
 
     virtual void render_test_case_end(const std::shared_ptr<test_run> &unit) override {
 
-      auto &tco = (render_immediate_mode) ? out : unit->out;
+      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
-      if(render_test_info) {
-        if(!render_immediate_mode) {
+      if(this->render_test_info) {
+        if(!this->render_immediate_mode) {
           render_test_case_header(tco, unit);
         }
 
@@ -163,21 +168,21 @@ namespace tipi::cute_ext
 
 
     virtual void render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
-      if(render_suite_info) {
+      if(this->render_suite_info) {
         sot << " ● " << suite_ptr->name << "\n" << SEPARATOR_THICK << "\n";
       }
     }
 
     virtual void render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
-      if(render_suite_info) {
+      if(this->render_suite_info) {
 
         if(suite_ptr->count_errors + suite_ptr->count_failures == 0) {
-          suite_success++;
+          this->suite_success++;
           sot << "\n"
               << "  | Suite     ✔  PASS";
         }
         else {
-          suite_failures++;
+          this->suite_failures++;
           sot << "\n"
               << "  | Suite     ❌ FAILED";
         }

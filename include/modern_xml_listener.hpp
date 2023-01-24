@@ -46,44 +46,46 @@ namespace tipi::cute_ext
     }
 
     void virtual render_preamble() override {
-      if(render_listener_info) {
-        out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            << "<testsuites>\n";
+      if(this->render_listener_info) {
+        this->out 
+          << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+          << "<testsuites>\n";
       }
     }
 
     void virtual render_end() override {
       using namespace std::chrono_literals;
 
-      if(render_listener_info) {
+      if(this->render_listener_info) {
         double total_time_ms = 0;
 
-        for(auto &[test, test_ptr] : tests) {
+        for(auto &[test, test_ptr] : this->tests) {
           total_time_ms += test_ptr->get_test_duration().count();         
         }
 
-        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(listener_end.value_or(std::chrono::steady_clock::now()) - listener_start);        
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);        
 
         const auto INDENT = "  ";
     
-        out << INDENT << "<!--\n"
-            << INDENT << INDENT << "tipi::cute_ext details \n"
-            << INDENT << INDENT << "Test stats: \n"
-            << INDENT << INDENT << " - suites executed:     " << suites.size() << "\n"
-            << INDENT << INDENT << " - suites passed:       " << suite_success << "\n"
-            << INDENT << INDENT << " - suites failed:       " << suite_failures << "\n"
-            << INDENT << INDENT << "\n"
-            << INDENT << INDENT << " - test cases executed: " << tests.size() << "\n"
-            << INDENT << INDENT << " - total test time:     " << total_time_ms << "s\n" 
-            << INDENT << INDENT << " - total user time:     " << user_total_time_ms.count() << "s\n"
-            << INDENT << "-->\n";
+        this->out 
+          << INDENT << "<!--\n"
+          << INDENT << INDENT << "tipi::cute_ext details \n"
+          << INDENT << INDENT << "Test stats: \n"
+          << INDENT << INDENT << " - suites executed:     " << this->suites.size() << "\n"
+          << INDENT << INDENT << " - suites passed:       " << this->suite_success << "\n"
+          << INDENT << INDENT << " - suites failed:       " << this->suite_failures << "\n"
+          << INDENT << INDENT << "\n"
+          << INDENT << INDENT << " - test cases executed: " << this->tests.size() << "\n"
+          << INDENT << INDENT << " - total test time:     " << total_time_ms << "s\n" 
+          << INDENT << INDENT << " - total user time:     " << user_total_time_ms.count() << "s\n"
+          << INDENT << "-->\n";
 
-        out << "</testsuites>\n";
+        this->out << "</testsuites>\n";
       }
     }
 
     virtual void render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
-      if(render_suite_info) {
+      if(this->render_suite_info) {
 
         const auto INDENT = "  "; // level 1 indenting
 
@@ -102,7 +104,7 @@ namespace tipi::cute_ext
     }
 
     virtual void render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
-      if(render_suite_info) {
+      if(this->render_suite_info) {
         
         const auto INDENT = "  "; // level 1 indenting
         sot << INDENT << "</testsuite>\n";
@@ -110,7 +112,7 @@ namespace tipi::cute_ext
     }
 
     virtual void render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
-      if(render_test_info) {
+      if(this->render_test_info) {
         
         const auto INDENT = "    ";
         
@@ -137,10 +139,10 @@ namespace tipi::cute_ext
     }
 
     virtual void render_test_case_start(const std::shared_ptr<test_run> &unit) override {
-      auto &tco = (render_immediate_mode) ? out : unit->out;
+      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
-      if(render_immediate_mode) {
-        render_test_case_header(tco, unit);
+      if(this->render_immediate_mode) {
+        this->render_test_case_header(tco, unit);
       }
     }
 
@@ -202,10 +204,10 @@ namespace tipi::cute_ext
 
     virtual void render_test_case_end(const std::shared_ptr<test_run> &unit) override {
 
-      auto &tco = (render_immediate_mode) ? out : unit->out;
+      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
-      if(render_test_info) {
-        if(!render_immediate_mode) {
+      if(this->render_test_info) {
+        if(!this->render_immediate_mode) {
           render_test_case_header(tco, unit);
         }
 

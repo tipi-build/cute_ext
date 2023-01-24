@@ -41,7 +41,7 @@ public:
     }
 
     int anotherTest(){
-        std::this_thread::sleep_for(50ms);
+        std::this_thread::sleep_for(100ms);
         ASSERT_EQUAL(42, 42);
         return 0;
     }
@@ -65,8 +65,8 @@ int main(int argc, char *argv[]) {
 
     cute::xml_file_opener xmlfile(argc, argv);
     //tipi::cute_ext::modern_xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};    
-    //tipi::cute_ext::modern_listener<> lis{};
-    tipi::cute_ext::modern_xml_listener<> lis{};
+    tipi::cute_ext::modern_listener<> lis{};
+    //tipi::cute_ext::modern_xml_listener<> lis{};
     //cute::xml_listener<> lis{std::cout};    
 	//cute::ide_listener<> lis{std::cout};    
 	//cute::ostream_listener<> lis{std::cout};    
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
 
 
     cute::suite s3{};
-    for(size_t i = 0; i < 20; i++) {
+    for(size_t i = 0; i < 200; i++) {
         std::string ctx = "s3_"s + std::to_string(i);
         s3 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, ctx.c_str());
     }
