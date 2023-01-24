@@ -324,9 +324,20 @@ namespace tipi::cute_ext {
       std::shared_ptr<std::thread> process_thread_ptr;
     };
 
+    template <typename Listener>
+    typename std::enable_if<!util::has_set_render_options_t<Listener>::value, bool>::type
+    cmd_autoparallel_wrap(Listener & listener) {
+      auto wrapped = cute_listener_wrapper(&listener);
+      return cmd_autoparallel<>(wrapped);
+    }
 
+    template <typename Listener>
+    typename std::enable_if<util::has_set_render_options_t<Listener>::value, bool>::type
+    cmd_autoparallel_wrap(Listener & listener) {
+      return cmd_autoparallel<>(listener);
+    }
 
-    template <typename Listener=cute::null_listener>
+    template <typename Listener>
     bool cmd_autoparallel(Listener & listener) {
 
       auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
@@ -610,32 +621,20 @@ namespace tipi::cute_ext {
           auto& output_stream = get_output();
 
           if(!opt_force_cli_listener) {
-
-            if (util::has_set_render_options<RunnerListener>(runner_listener_)) {
-              return cmd_autoparallel<>(runner_listener_);
-            }
-            else {
-              auto wrapped = cute_listener_wrapper(&runner_listener_);
-              return cmd_autoparallel<>(wrapped);
-            }
-            auto wrapped = cute_listener_wrapper<RunnerListener>{&runner_listener_};
-            return cmd_autoparallel<>(wrapped);
+            return cmd_autoparallel_wrap<RunnerListener>(runner_listener_);
           }
           else if(opt_listener == "ide") { 
             cute::ide_listener<> listener(output_stream); 
-            auto wrapped = cute_listener_wrapper(&listener);
-            return cmd_autoparallel<>(wrapped);
+            return cmd_autoparallel_wrap<>(listener);
           }
           else if(opt_listener == "classic") {
             cute::ostream_listener<> listener(output_stream);
-            auto wrapped = cute_listener_wrapper(&listener);
-            return cmd_autoparallel<>(wrapped);
+            return cmd_autoparallel_wrap<>(listener);
           }
           /* /!\ exe BOMB here? */
           else if(opt_listener == "classicxml"){
             cute::xml_listener<> listener(output_stream);
-            auto wrapped = cute_listener_wrapper(&listener);
-            return cmd_autoparallel<>(wrapped);
+            return cmd_autoparallel_wrap<>(listener);
           }
           else if(opt_listener == "modernxml"){
             cute_ext::modern_xml_listener<> listener(output_stream);
@@ -647,7 +646,7 @@ namespace tipi::cute_ext {
           }
           else {
             std::stringstream ss_err{};
-            ss_err << "Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'classic', 'ide', 'xml')";
+            ss_err << "Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'modernxml', 'classic', 'classicxml' and 'ide')";
             throw std::runtime_error(ss_err.str());
           }
         }      
@@ -693,9 +692,23 @@ namespace tipi::cute_ext {
     /// @param suite cute::suite
     /// @param info name
     void operator()(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
+  
+    template <typename FnListener>
+    typename std::enable_if<!util::has_set_render_options_t<FnListener>::value, bool>::type
+    run_templated_wrap(FnListener & listener, const std::unordered_map<std::string, cute::suite> &suites) {
+      auto wrapped = cute_listener_wrapper(&listener);
+      return run_templated<>(wrapped, suites);
+    }
 
-    template <typename Listener=cute_ext::parallel_listener<>>
-    bool run_templated(Listener & listener, const std::unordered_map<std::string, cute::suite> &suites) {
+    template <typename FnListener>
+    typename std::enable_if<util::has_set_render_options_t<FnListener>::value, bool>::type
+    run_templated_wrap(FnListener & listener, const std::unordered_map<std::string, cute::suite> &suites) { 
+      return run_templated<>(listener, suites);
+    }
+
+
+    template <typename FnListener=cute_ext::parallel_listener<>>
+    bool run_templated(FnListener& listener, const std::unordered_map<std::string, cute::suite> &suites) {
 
       auto filter_unit_enabled = make_filter_fn(opt_filter_unit_value);
       auto filter_suite_enabled = make_filter_fn(opt_filter_suite_value);
@@ -747,8 +760,6 @@ namespace tipi::cute_ext {
 
       bool result = true;
 
-      listener.render_preamble();
-
       for(const auto &[suite_name, suite] : suites) {
 
         if(filter_suite_enabled(suite_name)) {
@@ -784,37 +795,26 @@ namespace tipi::cute_ext {
         }        
       }
 
-      listener.render_end();
-
       return result;
     }
 
     bool run_suites(const std::unordered_map<std::string, cute::suite> &suites, std::ostream& output_stream) {
       
       if(!opt_force_cli_listener) {
-        if (util::has_set_render_options<RunnerListener>(runner_listener_)) {
-          return run_templated<>(runner_listener_, suites);
-        }
-        else {
-          auto wrapped = cute_listener_wrapper(&runner_listener_);
-          return run_templated<>(wrapped, suites);
-        }
+        return run_templated_wrap<RunnerListener>(runner_listener_, suites);
       }
       else if(opt_listener == "ide") { 
-        cute::ide_listener<> listener(output_stream); 
-        auto wrapped = cute_listener_wrapper(&listener);
-        return run_templated<>(wrapped, suites);
+        cute::ide_listener<> listener(output_stream);
+        return run_templated_wrap<>(listener, suites);
       }
       else if(opt_listener == "classic") {
         cute::ostream_listener<> listener(output_stream);
-        auto wrapped = cute_listener_wrapper(&listener);
-        return run_templated<>(wrapped, suites);
+        return run_templated_wrap<>(listener, suites);
       }
       //* // /!\ exe BOMB here?
       else if(opt_listener == "classicxml"){
         cute::xml_listener<> listener(output_stream);
-        auto wrapped = cute_listener_wrapper(&listener);
-        return run_templated<>(wrapped, suites);
+        return run_templated_wrap<>(listener, suites);
       }
       else if(opt_listener == "modernxml"){
         cute_ext::modern_xml_listener<> listener(output_stream);
@@ -826,7 +826,7 @@ namespace tipi::cute_ext {
       }
       else {
         std::stringstream ss_err{};
-        ss_err << "XXX Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'classic', 'ide', 'xml')";
+        ss_err << "XXX Unknown --listener option: " << opt_listener << " (valid options are: 'modern', 'modernxml', 'classic', 'classicxml' and 'ide')";
         throw std::runtime_error(ss_err.str());
       }
     }

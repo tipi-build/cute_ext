@@ -28,9 +28,11 @@ namespace tipi::cute_ext
   public:
     modern_listener(std::ostream &os = std::cerr) : ParallelListener(os)
     {
+      render_preamble(); 
     }
     
     ~modern_listener() {
+      render_end();
     }
 
     void virtual render_preamble() override {

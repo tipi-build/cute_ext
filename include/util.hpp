@@ -146,16 +146,4 @@ namespace tipi::cute_ext::util
   set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
     // we don't have any setting to apply - this one doesn't have the set_render_options() method...
   }
-
-  template<typename FnListener> 
-  typename std::enable_if<has_set_render_options_t<FnListener>::value, bool>::type
-  has_set_render_options(FnListener& listener) {
-    return true;
-  }
-
-  template<typename FnListener> 
-  typename std::enable_if<!has_set_render_options_t<FnListener>::value, bool>::type
-  has_set_render_options(FnListener& listener) {
-    return false;
-  }
 }
