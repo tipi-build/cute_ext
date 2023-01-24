@@ -121,7 +121,7 @@ namespace tipi::cute_ext
       }
 
       if(unit->get_test_duration().count() < 1) {
-         tco << "    (" << unit->get_test_duration().count() * 100 << "ms)";
+         tco << "    (" << unit->get_test_duration().count() * 1000 << "ms)";
       }
       else {
         tco << "    (" << unit->get_test_duration().count() << "s)";

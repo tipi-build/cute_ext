@@ -26,8 +26,8 @@ class OutTests {
 public:
     int lifeTheUniverseAndEverything = 6*7;
 
-    void mySimpleTest(){
-        std::this_thread::sleep_for(50ms);
+    void mySimpleTest(){        
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         ASSERT_EQUAL(42, lifeTheUniverseAndEverything);
     }
 
@@ -41,7 +41,7 @@ public:
     }
 
     int anotherTest(){
-        std::this_thread::sleep_for(100ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         ASSERT_EQUAL(42, 42);
         return 0;
     }
