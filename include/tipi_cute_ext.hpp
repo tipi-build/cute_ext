@@ -325,6 +325,30 @@ namespace tipi::cute_ext {
     };
 
     template <typename Listener>
+    typename std::enable_if<!util::has_set_render_options_t<Listener>::value, void>::type
+    listener_render_end(Listener & listener) {
+      //
+    }
+
+    template <typename Listener>
+    typename std::enable_if<util::has_set_render_options_t<Listener>::value, void>::type
+    listener_render_end(Listener & listener) {
+      listener.render_end();
+    }
+
+    template <typename Listener>
+    typename std::enable_if<!util::has_set_render_options_t<Listener>::value, void>::type
+    listener_render_preamble(Listener & listener) {
+      //
+    }
+
+    template <typename Listener>
+    typename std::enable_if<util::has_set_render_options_t<Listener>::value, void>::type
+    listener_render_preamble(Listener & listener) {
+      listener.render_preamble();
+    }
+
+    template <typename Listener>
     typename std::enable_if<!util::has_set_render_options_t<Listener>::value, bool>::type
     cmd_autoparallel_wrap(Listener & listener) {
       auto wrapped = cute_listener_wrapper(&listener);
@@ -492,6 +516,8 @@ namespace tipi::cute_ext {
 
       listener.render_end();
 
+      force_destructor_exit_code = (tests_failed == 0) ? 0 : 1;
+
       return tests_failed == 0;
     }
 
@@ -563,6 +589,11 @@ namespace tipi::cute_ext {
 
         auto fs = file_out_ptr_.get();
         out_stream_ = fs;
+
+
+        if(!opt_force_cli_listener) {
+          listener_render_preamble(runner_listener_);
+        }
       }
 
 
@@ -581,6 +612,10 @@ namespace tipi::cute_ext {
 
       if(force_destructor_exit_code.has_value()) {
         std::exit(force_destructor_exit_code.value());
+      }
+
+      if(!opt_force_cli_listener) {
+        listener_render_end(runner_listener_);
       }
 /*
       if(file_out_ptr_ && file_out_ptr_->is_open()) {
