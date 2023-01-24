@@ -412,8 +412,7 @@ namespace tipi::cute_ext {
 
           nextit->start([&](const auto &task) {
 
-            auto urr = task.get_run_unit_result();
-            
+            auto urr = task.get_run_unit_result();            
 
             if(urr == detail::run_unit_result::passed || urr == detail::run_unit_result::skipped) {
               listener.success(task.get_cute_unit(), "");

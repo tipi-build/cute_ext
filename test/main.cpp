@@ -66,9 +66,9 @@ int main(int argc, char *argv[]) {
     cute::xml_file_opener xmlfile(argc, argv);
     //tipi::cute_ext::modern_xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};    
     //tipi::cute_ext::modern_listener<> lis{};
-    //tipi::cute_ext::modern_xml_listener<> lis{};
+    tipi::cute_ext::modern_xml_listener<> lis{};
     //cute::xml_listener<> lis{std::cout};    
-	cute::ide_listener<> lis{std::cout};    
+	//cute::ide_listener<> lis{std::cout};    
 	//cute::ostream_listener<> lis{std::cout};    
 	
     auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);

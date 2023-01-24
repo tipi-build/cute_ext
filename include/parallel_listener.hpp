@@ -168,7 +168,7 @@ namespace tipi::cute_ext
 
     void end(cute::suite const &suite, char const *info)
     {
-      {
+      if(suites.find(&suite) != suites.end()) {
         auto suite_ptr = suites.at(&suite);
         suite_ptr->done(info);
         render_suite_end(suite_ptr);
