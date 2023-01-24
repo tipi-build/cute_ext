@@ -60,7 +60,7 @@ cute::suite make_suite_ReadOnlyIniFileTest()
 
 using namespace std::string_literals;
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char **argv) {
     tipi::cute_ext::util::enable_vt100_support_windows10();    
 
     cute::xml_file_opener xmlfile(argc, argv);

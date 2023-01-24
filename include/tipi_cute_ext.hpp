@@ -547,10 +547,10 @@ namespace tipi::cute_ext {
       return *out_stream_;
     }
 
-    wrapper(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true)
+    wrapper(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true)
       : runner_listener_(listener)
       , opt_exit_on_destruction(exit_on_destruction)
-      , args_(argc, argv)
+      , args_(argc, const_cast<char **>(argv))
     {
       program_exe_path        = std::string(argv[0]);
 
@@ -879,7 +879,7 @@ namespace tipi::cute_ext {
   /// @param exit_on_destruction 
   /// @return 
   template <typename RunnerListener = cute::null_listener>
-  inline wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true) {
+  inline wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true) {
     return wrapper<RunnerListener>(listener, argc, argv, exit_on_destruction);
   }
 
