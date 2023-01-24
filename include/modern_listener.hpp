@@ -78,7 +78,7 @@ namespace tipi::cute_ext
           << " - total test time:     " << total_time_ms << "s\n" 
           << " - total user time:     " << user_total_time_ms.count() << "s\n"
           << "\n";
-
+ 
           
         if(this->suite_failures == 0) {
           this->out << termcolor::green << "✔  PASS";

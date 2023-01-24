@@ -209,9 +209,9 @@ namespace tipi::cute_ext {
     struct autoparallel_testcase {
 
       autoparallel_testcase(const std::string& base_cmd, const std::string &suite, const std::string &unit, const cute::test &cute_unit)
-        : process_base_cmd_(base_cmd)
-        , suite_(suite)
+        : suite_(suite)
         , unit_(unit)
+        , process_base_cmd_(base_cmd)
         , cute_unit_(cute_unit)
         , out_ss_ptr_{std::make_shared<std::stringstream>()}
       {          
@@ -511,16 +511,10 @@ namespace tipi::cute_ext {
       return *out_stream_;
     }
 
-    /*wrapper(int argc, char *argv[], bool exit_on_destruction = true)
-      : wrapper(argc, argv, detail::dummy_null_listener, exit_on_destruction)
-    {
-      use_user_defined_listener_ = false;
-    }*/
-
     wrapper(RunnerListener& listener, int argc, char *argv[], bool exit_on_destruction = true)
       : runner_listener_(listener)
-      , args_(argc, argv)
       , opt_exit_on_destruction(exit_on_destruction)
+      , args_(argc, argv)
     {
       program_exe_path        = std::string(argv[0]);
 
