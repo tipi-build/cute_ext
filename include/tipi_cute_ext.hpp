@@ -519,7 +519,7 @@ namespace tipi::cute_ext {
       if(force_destructor_exit_code.value_or(0) == 0) { 
         force_destructor_exit_code = (tests_failed == 0) ? 0 : 1;
       }
-      
+
       return tests_failed == 0;
     }
 
@@ -535,6 +535,7 @@ namespace tipi::cute_ext {
       }
 
       if(!success) {
+        force_destructor_exit_code = 1;  
         test_exec_failures++;
       }
 
@@ -612,13 +613,14 @@ namespace tipi::cute_ext {
         process_cmd();
       }
 
+      if(!opt_force_cli_listener) {
+        listener_render_end(runner_listener_);
+      }
+
       if(force_destructor_exit_code.has_value()) {
         std::exit(force_destructor_exit_code.value());
       }
 
-      if(!opt_force_cli_listener) {
-        listener_render_end(runner_listener_);
-      }
 /*
       if(file_out_ptr_ && file_out_ptr_->is_open()) {
         get_output() << std::flush; 

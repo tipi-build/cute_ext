@@ -122,9 +122,7 @@ int main(int argc, const char **argv) {
         return -1;
     }*/
 
-    if(runner.get_failure_count() > 0) {
-        return 1;
-    }
+    
     
     return 0;
 }
