@@ -18,6 +18,6 @@
         "x:clang-cxx17": ["test/", "example.cpp", "process_win.cpp"]
     },
     "ikalnytskyi/termcolor": {
-        "@": "v2.1.0"
+        "@": ":b3cb0f365f8435588df7a6b12a82b2ac5fc1fe95"
     }
 }
