@@ -116,6 +116,7 @@ namespace tipi::cute_ext {
         
         parallel_strands_arg  = args_.get<size_t>("j", std::thread::hardware_concurrency() + 1);
         parallel_run          = args_.get<bool>("parallel", false);
+        run_explicit          = args_.get<bool>("run", false);
         
         list_testcases        = args_.get<bool>("list-testcases") || args_.get<bool>("ltc");
         show_help             = args_.get<bool>("help", false) || args_.get<bool>("h", false) || args_.get<bool>("?", false);
@@ -358,10 +359,10 @@ namespace tipi::cute_ext {
 
           process_ptr = std::make_shared<TinyProcessLib::Process>(
             cmd_ss.str(), 
-            "", /* env */
+            "",         /* env */
             processio,  /*stdout */
             processio,  /*stderr */
-            false     /* don't open stdin */
+            false       /* don't open stdin */
           );
 
           int exit_code;
@@ -598,11 +599,6 @@ namespace tipi::cute_ext {
 
     ~wrapper() {
 
-      // list here
-      if(opt.list_testcases) {
-        print_all_tests();
-      }
-
       if(opt.parallel_run) {
         process_cmd();
       }
@@ -624,18 +620,27 @@ namespace tipi::cute_ext {
         std::exit(0);
       }
 
+      // list here
+      if(opt.list_testcases) {
+        print_all_tests();
+
+        if(!opt.run_explicit) {
+          std::exit(0);
+        }
+      }
+
       if(opt.parallel_child_run) {
         return cmd_run_base();
       }
 
       // run the suite automatically if no additional params are provided OR and explicit --run is present
-      if(opt.run_explicit || (!opt.run_explicit && !opt.list_testcases) ) {
+      if(!opt.list_testcases || opt.run_explicit) {
 
         if(opt.parallel_run) {
           return cmd_autoparallel();
         }      
 
-        bool success = cmd_run_base();        
+        return cmd_run_base();        
       }
 
       return true;
@@ -677,7 +682,9 @@ namespace tipi::cute_ext {
     /// @param info name
     void operator()(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
   
-    bool run_templated(ext_listener& listener, const std::unordered_map<std::string, cute::suite> &suites) {
+    bool run_suites(const std::unordered_map<std::string, cute::suite> &suites) {
+
+      ext_listener& listener = opt.get_listener();
 
       auto filter_unit_enabled = make_filter_fn(opt.filter_unit_value);
       auto filter_suite_enabled = make_filter_fn(opt.filter_suite_value);
@@ -769,10 +776,6 @@ namespace tipi::cute_ext {
       }        
 
       return result;
-    }
-
-    bool run_suites(const std::unordered_map<std::string, cute::suite> &suites) { 
-      return run_templated(opt.get_listener(), suites);
     }
 
   };    

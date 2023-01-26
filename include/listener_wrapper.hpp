@@ -8,13 +8,17 @@ namespace tipi::cute_ext
 {
   using namespace std::string_literals;
 
-  /// @brief Just a wrapper to decorate original cute::*_listener-s in a way all functions we expect are present
+  /// @brief Just a wrapper to decorate original cute listeners that get
+  /// passed to cute_ext to make them all look like an ext_listener
   /// @tparam Listener 
   template <typename t_wrapped=cute::null_listener>
   struct listener_wrapper : public ext_listener
   {    
   private:
+    /// @brief holds the instance listener if it gets constructed in place
     std::shared_ptr<t_wrapped> held_listener_;
+
+    /// @brief ref to the passed or instanciated listener
     t_wrapped& wrapped_;
 
   public:

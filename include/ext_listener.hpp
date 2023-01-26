@@ -34,13 +34,25 @@ namespace tipi::cute_ext
     /// @param suite 
     virtual void test_start(cute::test const &test, const cute::suite& suite) = 0;
     
-    
+    /// @brief Mark a test/unit as PASS
+    /// @param test 
+    /// @param msg 
     virtual void test_success(cute::test const &test, char const *msg) = 0;
+    
+    /// @brief Mark a test/unit as FAILED
+    /// @param test 
+    /// @param e 
     virtual void test_failure(cute::test const &test, cute::test_failure const &e) = 0;
+    
+    /// @brief Mark a test/unit as ERROR
+    /// @param test 
+    /// @param what 
     virtual void test_error(cute::test const &test, char const *what) = 0;
 
-    /// @brief 
+    /// @brief Render the preamble (everything before the first suite gets rendered)
     virtual void render_preamble() = 0;
+
+    /// @brief Render the test summary / footer to the run
     virtual void render_end() = 0;
   };
 }

@@ -12,6 +12,7 @@
 #include <mutex>
 
 #include <termcolor/termcolor.hpp>
+#include <cute/cute.h>
 
 #include "ext_listener.hpp"
 
@@ -105,6 +106,8 @@ namespace tipi::cute_ext
     }
   }
 
+  /// @brief A base listener capable of buffering all the concurrent execution results to
+  /// render a beautiful output even in parallel mode
   struct parallel_listener : public ext_listener
   {
 

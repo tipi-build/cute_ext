@@ -5,11 +5,6 @@
 #include <vector>
 
 #include <cute/cute_listener.h>
-#include <cute/cute_counting_listener.h>
-#include <cute/ostream_listener.h>
-#include <cute/ide_listener.h>
-#include <cute/tap_listener.h>
-#include <cute/xml_listener.h>
 
 #if defined(_WIN32)
 #include <winsock.h>
@@ -134,18 +129,6 @@ namespace tipi::cute_ext::util
   public:
       enum { value = sizeof(test<Listener>(0)) == sizeof(YesType) };
   };
-
-  template<typename FnListener> 
-  typename std::enable_if<has_set_render_options_t<FnListener>::value, void>::type
-  set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
-    listener.set_render_options(render_listener_info, render_suite_info, render_test_info, render_immediate_mode);
-  }
-
-  template<typename FnListener> 
-  typename std::enable_if<!has_set_render_options_t<FnListener>::value, void>::type
-  set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
-    // we don't have any setting to apply - this one doesn't have the set_render_options() method...
-  }
 
   /// @brief the name says it all - a copy/move-able std::atomic<T>
   /// @tparam cnt_T 

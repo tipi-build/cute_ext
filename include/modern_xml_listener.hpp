@@ -6,6 +6,7 @@
 #include <atomic>
 
 #include <termcolor/termcolor.hpp>
+#include <cute/cute.h>
 
 #include "parallel_listener.hpp"
 
