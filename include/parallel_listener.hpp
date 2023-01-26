@@ -38,6 +38,8 @@ namespace tipi::cute_ext
     std::stringstream out{};
     std::stringstream info{};
 
+    std::atomic<bool> marked_done = false;
+
     test_run(std::string name, std::shared_ptr<tipi::cute_ext::suite_run> suite_ptr)
       : name(name)
       , start(std::chrono::steady_clock::now())
@@ -66,6 +68,8 @@ namespace tipi::cute_ext
     std::atomic<size_t> count_errors = 0;
     std::atomic<size_t> count_success = 0;
 
+    std::atomic<bool> marked_done = false;
+
     std::vector<std::shared_ptr<test_run>> tests{};
     std::stringstream out{};
     std::stringstream info{};
@@ -75,12 +79,30 @@ namespace tipi::cute_ext
       , start(std::chrono::steady_clock::now())
       , count_expected(number_of_tests)
     {
-
     }
 
     void done(std::string info) {
-      this->end = std::chrono::steady_clock::now();
-      this->info << info;
+      bool expected = false;
+
+      // thread safe "only once" barrier
+      if(marked_done.compare_exchange_strong(expected, true)) { 
+        this->end = std::chrono::steady_clock::now();
+        this->info << info;
+      }
+    }
+
+    bool count_failed_tests() {
+      return std::count_if(
+        tests.begin(),
+        tests.end(), 
+        [](auto &test) { 
+          return test->marked_done && test->outcome != test_run_outcome::Pass; 
+        }
+      );
+    }
+
+    bool is_success() {
+      return marked_done == true && count_failed_tests() == 0;
     }
 
     /// @brief Return the test run duration. If the test has not ended yet returns the difference to now()
@@ -91,18 +113,24 @@ namespace tipi::cute_ext
   };
 
   void test_run::done(test_run_outcome outcome, const std::string &info) {
-    this->outcome = outcome;
-    this->end = std::chrono::steady_clock::now();
-    this->info << info;   
 
-    if(outcome == test_run_outcome::Pass) {
-      this->suite_run->count_success++;
-    }
-    else if(outcome == test_run_outcome::Fail) {
-      this->suite_run->count_failures++;
-    }
-    else if(outcome == test_run_outcome::Error) {
-      this->suite_run->count_errors++;
+    bool expected = false;
+
+    // thread safe "only once" barrier
+    if(marked_done.compare_exchange_strong(expected, true)) {
+      this->outcome = outcome;
+      this->end = std::chrono::steady_clock::now();
+      this->info << info;   
+
+      if(outcome == test_run_outcome::Pass) {
+        this->suite_run->count_success++;
+      }
+      else if(outcome == test_run_outcome::Fail) {
+        this->suite_run->count_failures++;
+      }
+      else if(outcome == test_run_outcome::Error) {
+        this->suite_run->count_errors++;
+      }
     }
   }
 
@@ -228,10 +256,15 @@ namespace tipi::cute_ext
     }
 
     void test_failure(cute::test const &test, cute::test_failure const &e) override
-    {      
+    {
       std::stringstream ss{};
-      ss << "[" << e.filename << ":" << e.lineno << "]\n" << e.reason;    
-      
+
+      if(e.lineno > 0) {        
+        ss << "[" << e.filename << ":" << e.lineno << "]\n";    
+      }
+
+      ss << e.reason;
+
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Fail, ss.str());
       

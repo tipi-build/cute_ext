@@ -61,16 +61,20 @@ namespace tipi::cute_ext
           total_time_ms += test_ptr->get_test_duration().count();         
         }
 
-        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);        
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);  
+
+
+        auto count_suites_pass = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success(); });
+        auto count_suites_fail = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success() == false; });  
 
         this->out 
           << "\n"
           << "Test stats: \n"
           << " - suites executed:     " << this->suites.size() << "\n"
-          << " - suites passed:       " << this->suite_success << "\n";
+          << " - suites passed:       " << count_suites_pass << "\n";
 
         if(this->suite_failures > 0) { this->out << termcolor::red; }
-        this->out << " - suites failed:       " << this->suite_failures << "\n";
+        this->out << " - suites failed:       " << count_suites_fail << "\n";
         if(this->suite_failures > 0) { this->out << termcolor::reset; }
 
         this->out 
@@ -105,6 +109,18 @@ namespace tipi::cute_ext
       }
     }
 
+    std::string print_line_prefix(std::istream& input, std::string line_prefix) {
+
+      std::stringstream output{};
+
+      std::string line;
+      while (std::getline(input, line)) {
+        output << line_prefix << line << "\n";
+      }
+
+      return output.str();
+    }
+
     virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
 
       if(unit->outcome == test_run_outcome::Pass) {
@@ -129,20 +145,17 @@ namespace tipi::cute_ext
      
       if(unit->outcome == test_run_outcome::Fail) {
         tco << "\n"
-            << SEPARATOR_THIN
-            << unit->info.str()
+            << termcolor::red  
+            << print_line_prefix(unit->info, " :> ")
             << "\n"
-            << termcolor::reset
-            << SEPARATOR_THIN;
+            << termcolor::reset;
       }
       else if(unit->outcome == test_run_outcome::Error) {
         tco << "\n"
-            << SEPARATOR_THIN
-            << "Unhandled exception:\n"
-            << unit->info.str()
+            << termcolor::red 
+            << print_line_prefix(unit->info, " :> ")
             << "\n"
-            << termcolor::reset
-            << SEPARATOR_THIN;
+            << termcolor::reset;
       }
       else {
         tco << "\n";
@@ -176,12 +189,10 @@ namespace tipi::cute_ext
       if(this->render_suite_info) {
 
         if(suite_ptr->count_errors + suite_ptr->count_failures == 0) {
-          this->suite_success++;
           sot << "\n"
               << "  | Suite     " << util::symbols::suite_pass << " PASS";
         }
         else {
-          this->suite_failures++;
           sot << "\n"
               << "  | Suite     " << util::symbols::suite_fail << " FAILED";
         }
