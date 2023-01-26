@@ -170,10 +170,33 @@ Test stats:
 🟥 FAILED 🟥
 ```
 
-How-to
-------
+How-to migrate from the original cute
+--------------
 
-Add `tipi::cute_ext` to your `.tipi/deps` and adapt your test-executable entry point to use the `tipi::cute_ext::wrapper`
+1. Add `tipi::cute_ext` to your `.tipi/deps`
+2. Add `#include <tipi_cute_ext.hpp>` and replace `cute::makeRunner` by `tipi::cute_ext::makeRunner`.
+3. That's it run with nice ouput : ` your-test.exe --force-listener --listener=modern --parallel`
+
+🚀 Want speed ? Add  `--parallel` to the line.
+
+
+```cpp
+#include <cute/cute.h>
+#include <tipi_cute_ext.hpp>
+
+int main(int argc, const char *argv[])
+{
+    cute::xml_file_opener xmlfile(argc, argv);
+    cute::xml_listener < cute::ide_listener<> > lis(xmlfile.out);
+
+    auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
+
+   ...
+```
+
+
+Work with the new API only
+--------------------------
 
 ```cpp
 #include <cute/cute.h>
