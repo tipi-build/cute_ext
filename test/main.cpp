@@ -9,7 +9,7 @@
 #include <util.hpp>
 
 #include <parallel_listener.hpp>
-#include <cute_listener_wrapper.hpp>
+#include <listener_wrapper.hpp>
 
 #include <iostream>
 #include <thread>
@@ -37,6 +37,7 @@ public:
 
     
     void throwingtest(){
+        std::cout << "Hallo EH TDG" << std::endl;  
         throw std::runtime_error("Blah!");
     }
 
@@ -57,6 +58,35 @@ cute::suite make_suite_ReadOnlyIniFileTest()
     return s;
 }
 
+struct ynull_listener : public cute::null_listener { // defines Contract of runner parameter#
+
+    static size_t cnt;
+
+    size_t instanceCnt;
+
+    ynull_listener() {
+
+        instanceCnt = ynull_listener::cnt++;
+        std::cout << "ynull_listener() / " << instanceCnt << " / " << this << std::endl;
+
+    }
+
+    ~ynull_listener() {
+        std::cout << "~ynull_listener() / " << instanceCnt << std::endl;
+    }
+    
+    void begin(cute::suite const &s, char const * info, size_t n_of_tests){
+        std::cout << "ynull_listener::being() / " << this << " / " << info << std::endl;
+
+    }
+    void end(cute::suite const &, char const * /*info*/){}
+    void start(cute::test const &){}
+    void success(cute::test const &,char const * /*msg*/){}
+    void failure(cute::test const &, cute::test_failure const &){}
+    void error(cute::test const &,char const * /*what*/){}
+};
+
+size_t ynull_listener::cnt = 0;
 
 using namespace std::string_literals;
 
@@ -65,11 +95,12 @@ int main(int argc, const char **argv) {
 
     cute::xml_file_opener xmlfile(argc, argv);
     //tipi::cute_ext::modern_xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};    
-    //tipi::cute_ext::modern_listener<> lis{};
-    //tipi::cute_ext::modern_xml_listener<> lis{};
+    tipi::cute_ext::modern_listener lis{};
+    //tipi::cute_ext::modern_xml_listener lis{};
     //cute::xml_listener<> lis{std::cout};    
-	cute::ide_listener<> lis{std::cout};    
+	//cute::ide_listener<> lis{std::cout};    
 	//cute::ostream_listener<> lis{std::cout};    
+    //ynull_listener lis{};
 	
     auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
 
@@ -81,7 +112,7 @@ int main(int argc, const char **argv) {
     cute::suite s2{};
     s2 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s2_0");
     
-    s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_0");
+    s2 += TIPI_CUTE_SMEMFUN(OutTests, failingtest, "s2_0");
     s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_1");
     s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_2");
     s2 += TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s2_3");
@@ -112,8 +143,8 @@ int main(int argc, const char **argv) {
     runner(s2, "Suite 2");
     runner(s3, "Suite 3");
     runner(make_suite_ReadOnlyIniFileTest(), "Temp suite");
-    runner(make_suite(), "External suite");    
-
+    runner(make_suite(), "External suite");  
+    
     /*try {
         wrapper.process_cmd();
     }

@@ -5,15 +5,15 @@
 #include <sstream>
 #include <atomic>
 
-#include <cute/cute_listener.h>
 #include <termcolor/termcolor.hpp>
+
+#include "parallel_listener.hpp"
 
 namespace tipi::cute_ext
 {
   using namespace std::string_literals;
 
-  template <typename ParallelListener=cute_ext::parallel_listener<>>
-  struct modern_xml_listener : public ParallelListener
+  struct modern_xml_listener : public parallel_listener
   {
     protected:
 
@@ -38,13 +38,13 @@ namespace tipi::cute_ext
 
   public:
 
-    modern_xml_listener(std::ostream &os = std::cerr) : ParallelListener(os) {
+    modern_xml_listener(std::ostream &os = std::cerr) : parallel_listener(os) {
     }
     
     ~modern_xml_listener() {
     }
 
-    void virtual render_preamble() override {
+    void virtual parallel_render_preamble() override {
       if(this->render_listener_info) {
         this->out 
           << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -52,7 +52,7 @@ namespace tipi::cute_ext
       }
     }
 
-    void virtual render_end() override {
+    void virtual parallel_render_end() override {
       using namespace std::chrono_literals;
 
       if(this->render_listener_info) {
@@ -83,7 +83,7 @@ namespace tipi::cute_ext
       }
     }
 
-    virtual void render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+    virtual void parallel_render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
       if(this->render_suite_info) {
 
         const auto INDENT = "  "; // level 1 indenting
@@ -102,7 +102,7 @@ namespace tipi::cute_ext
       }
     }
 
-    virtual void render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+    virtual void parallel_render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
       if(this->render_suite_info) {
         
         const auto INDENT = "  "; // level 1 indenting
@@ -110,7 +110,7 @@ namespace tipi::cute_ext
       }
     }
 
-    virtual void render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
       if(this->render_test_info) {
         
         const auto INDENT = "    ";
@@ -137,15 +137,15 @@ namespace tipi::cute_ext
       }        
     }
 
-    virtual void render_test_case_start(const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_start(const std::shared_ptr<test_run> &unit) override {
       auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
       if(this->render_immediate_mode) {
-        this->render_test_case_header(tco, unit);
+        this->parallel_render_test_case_header(tco, unit);
       }
     }
 
-    virtual void render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
       
 
       const auto INDENT = "    ";
@@ -201,16 +201,16 @@ namespace tipi::cute_ext
       }
     }
 
-    virtual void render_test_case_end(const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_end(const std::shared_ptr<test_run> &unit) override {
 
       auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
       if(this->render_test_info) {
         if(!this->render_immediate_mode) {
-          render_test_case_header(tco, unit);
+          parallel_render_test_case_header(tco, unit);
         }
 
-        render_test_case_result(tco, unit);        
+        parallel_render_test_case_result(tco, unit);        
       }
       else {
         tco << unit->info.str();

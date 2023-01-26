@@ -11,8 +11,9 @@
 #include <vector>
 #include <mutex>
 
-#include <cute/cute_listener.h>
 #include <termcolor/termcolor.hpp>
+
+#include "ext_listener.hpp"
 
 namespace tipi::cute_ext
 {
@@ -104,8 +105,7 @@ namespace tipi::cute_ext
     }
   }
 
-  template <typename Listener = cute::null_listener>
-  struct parallel_listener : public Listener
+  struct parallel_listener : public ext_listener
   {
 
   protected:
@@ -149,72 +149,82 @@ namespace tipi::cute_ext
       this->render_immediate_mode = immediate_mode;
     }
 
-    void begin(cute::suite const &suite, char const *info, size_t n_of_tests)
+    void render_preamble() override {
+      parallel_render_preamble();
+    }
+
+    void render_end() override {
+      parallel_render_end();
+    }
+
+    void suite_begin(cute::suite const &suite, char const *info, size_t n_of_tests) override 
     {
       auto suite_run_ptr = std::make_shared<suite_run>(std::string{info}, n_of_tests);
       {
         const std::lock_guard<std::mutex> lock(suites_i_mutex);
-        const cute::suite* suite_ptr = &suite;
 
-        auto er = suites.emplace(suite_ptr, suite_run_ptr);
+        auto er = suites.emplace(&suite, suite_run_ptr);
         if(er.second) {
           current_suite_ = suite_run_ptr;   // store for linear mode
         }
       }
 
-      render_suite_start(suite_run_ptr);
-      Listener::begin(suite, info, n_of_tests);
+      if(render_immediate_mode) {
+        parallel_render_suite_header(out, suite_run_ptr);
+      }
     }
 
-    void end(cute::suite const &suite, char const *info)
+    void suite_end(cute::suite const &suite, char const *info) override
     {
       if(suites.find(&suite) != suites.end()) {
         auto suite_ptr = suites.at(&suite);
-        suite_ptr->done(info);
-        render_suite_end(suite_ptr);
-      }
+        suite_ptr->done(info);      
 
-      Listener::end(suite, info);
+        auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
+
+        if(!render_immediate_mode) {
+          parallel_render_suite_header(sot, suite_ptr);
+
+          for(const auto &t : suite_ptr->tests) {
+            sot << t->out.str();
+          }
+        }
+
+        parallel_render_suite_footer(sot, suite_ptr);
+
+        if(!render_immediate_mode) {
+          out << suite_ptr->out.str();
+        }
+      }
     }
 
-    void start_internal(cute::test const &test, const std::shared_ptr<suite_run> sr) {  
-
+    void test_start(cute::test const &test, const cute::suite& suite)
+    {
+      auto suite_ptr = suites.at(&suite);
       const std::lock_guard<std::mutex> lock(tests_i_mutex);  
-      auto test_run_ptr = std::make_shared<test_run>(test.name(), sr);  
+      auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);  
 
       auto er = tests.emplace(&test, test_run_ptr);
       if(er.second) {
         current_test_ = test_run_ptr;
 
-        if(sr) {
-          sr->tests.emplace_back(test_run_ptr);
+        if(suite_ptr) {
+          suite_ptr->tests.emplace_back(test_run_ptr);
         }
       }        
 
-      render_test_case_start(test_run_ptr);      
-      Listener::start(test);
+      parallel_render_test_case_start(test_run_ptr);
     }
 
-    void start(cute::test const &test) {
-      start_internal(test, current_suite_);
-    }
-
-    void start(cute::test const &test, const cute::suite& suite)
-    {
-      auto suite_ptr = suites.at(&suite);
-      start_internal(test, suite_ptr);
-    }
-
-    void success(cute::test const &test, char const *msg)
+    void test_success(cute::test const &test, char const *msg)
     {
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Pass, msg);
 
-      render_test_case_end(test_run_ptr);
-      Listener::success(test, msg);
+      parallel_render_test_case_end(test_run_ptr);
     }
 
-    void failure(cute::test const &test, cute::test_failure const &e)
+    void test_failure(cute::test const &test, cute::test_failure const &e)
     {      
       std::stringstream ss{};
       ss << "[" << e.filename << ":" << e.lineno << "]\n" << e.reason;    
@@ -222,67 +232,26 @@ namespace tipi::cute_ext
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Fail, ss.str());
       
-      render_test_case_end(test_run_ptr);
-      Listener::failure(test, e);
+      parallel_render_test_case_end(test_run_ptr);
     }
 
-    void failure(cute::test const &test, char const *what)
-    {
-      auto test_run_ptr = tests.at(&test);
-      test_run_ptr->done(test_run_outcome::Fail, what);
-
-      render_test_case_end(test_run_ptr);
-      
-      cute::test_failure e(what, "", 0);
-      Listener::failure(test, e);
-    }
-
-    void error(cute::test const &test, char const *what)
+    void test_error(cute::test const &test, char const *what)
     {
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Error, what);
 
-      render_test_case_end(test_run_ptr);
-      Listener::error(test, what);
+      parallel_render_test_case_end(test_run_ptr);
     }
 
-    virtual void render_preamble() = 0;
-    virtual void render_end() = 0;
-    virtual void render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) = 0;
-    virtual void render_test_case_start(const std::shared_ptr<test_run> &unit) = 0;
-    virtual void render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) = 0;
-    virtual void render_test_case_end(const std::shared_ptr<test_run> &unit) = 0;
-    virtual void render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) = 0;
-    virtual void render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) = 0;
+    virtual void parallel_render_preamble() = 0;
+    virtual void parallel_render_end() = 0;
+    virtual void parallel_render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) = 0;
+    virtual void parallel_render_test_case_start(const std::shared_ptr<test_run> &unit) = 0;
+    virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) = 0;
+    virtual void parallel_render_test_case_end(const std::shared_ptr<test_run> &unit) = 0;
+    virtual void parallel_render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) = 0;
+    virtual void parallel_render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) = 0;
     
-    void render_suite_start(const std::shared_ptr<suite_run> &suite_ptr) {
-
-      auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
-
-      if(render_immediate_mode) {
-        render_suite_header(sot, suite_ptr);
-      }
-
-    }
-
-    void render_suite_end(const std::shared_ptr<suite_run> &suite_ptr) {
-
-      auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
-
-      if(!render_immediate_mode) {
-        render_suite_header(sot, suite_ptr);
-
-        for(const auto &t : suite_ptr->tests) {
-          sot << t->out.str();
-        }
-      }
-
-      render_suite_footer(sot, suite_ptr);
-
-      if(!render_immediate_mode) {
-        out << suite_ptr->out.str();
-      }
-    }
   };
 
 }

@@ -146,4 +146,25 @@ namespace tipi::cute_ext::util
   set_render_options(FnListener& listener, bool render_listener_info, bool render_suite_info, bool render_test_info, bool render_immediate_mode) {
     // we don't have any setting to apply - this one doesn't have the set_render_options() method...
   }
+
+  /// @brief the name says it all - a copy/move-able std::atomic<T>
+  /// @tparam cnt_T 
+  template<class cnt_T>
+  class copyable_atomic : public std::atomic<cnt_T>
+  {
+  public:
+    copyable_atomic() = default;
+    constexpr copyable_atomic(cnt_T desired) : std::atomic<cnt_T>(desired) { /**/ }
+    constexpr copyable_atomic(const copyable_atomic<cnt_T>& other) :
+        copyable_atomic(other.load(std::memory_order_relaxed))
+    { /**/ }
+
+    copyable_atomic& operator=(const copyable_atomic<cnt_T>& other) {
+      // avoid  unexpected reorderings
+      this->store(
+        other.load(std::memory_order_acquire),
+        std::memory_order_release);
+      return *this;
+    }
+  };
 }

@@ -17,8 +17,7 @@
 
 namespace tipi::cute_ext
 {
-  template <typename ParallelListener=cute_ext::parallel_listener<>>
-  struct modern_listener : public ParallelListener
+  struct modern_listener : public parallel_listener
   {
   protected:
     const std::string SEPARATOR_THICK = "===============================================================================\n";
@@ -26,14 +25,14 @@ namespace tipi::cute_ext
   
 
   public:
-    modern_listener(std::ostream &os = std::cerr) : ParallelListener(os)
-    { 
+    modern_listener(std::ostream &os = std::cerr) 
+      : parallel_listener(os) {  
     }
     
     ~modern_listener() {
     }
 
-    void virtual render_preamble() override {
+    void virtual parallel_render_preamble() override {
 
       if(this->render_listener_info) {
 
@@ -51,7 +50,7 @@ namespace tipi::cute_ext
       }
     }
 
-    void virtual render_end() override {
+    void virtual parallel_render_end() override {
       using namespace std::chrono_literals;
 
       if(this->render_listener_info) {
@@ -91,21 +90,21 @@ namespace tipi::cute_ext
       }
     }
 
-    virtual void render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
       if(this->render_test_info) {
         tco << " ▶ " << util::padRight(unit->name, 40, ' ') << std::flush;
       }        
     }
 
-    virtual void render_test_case_start(const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_start(const std::shared_ptr<test_run> &unit) override {
       auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
       if(this->render_immediate_mode) {
-        render_test_case_header(tco, unit);
+        parallel_render_test_case_header(tco, unit);
       }
     }
 
-    virtual void render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
 
       if(unit->outcome == test_run_outcome::Pass) {
         tco << termcolor::green << util::padRight("✔  PASS", 12, ' ') << termcolor::reset;
@@ -150,30 +149,29 @@ namespace tipi::cute_ext
     
     }
 
-    virtual void render_test_case_end(const std::shared_ptr<test_run> &unit) override {
+    virtual void parallel_render_test_case_end(const std::shared_ptr<test_run> &unit) override {
 
       auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
       if(this->render_test_info) {
         if(!this->render_immediate_mode) {
-          render_test_case_header(tco, unit);
+          parallel_render_test_case_header(tco, unit);
         }
 
-        render_test_case_result(tco, unit);        
+        parallel_render_test_case_result(tco, unit);        
       }
       else {
         tco << unit->info.str();
       } 
     }
 
-
-    virtual void render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+    virtual void parallel_render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
       if(this->render_suite_info) {
         sot << " ● " << suite_ptr->name << "\n" << SEPARATOR_THICK << "\n";
       }
     }
 
-    virtual void render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+    virtual void parallel_render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
       if(this->render_suite_info) {
 
         if(suite_ptr->count_errors + suite_ptr->count_failures == 0) {
