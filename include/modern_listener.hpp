@@ -61,9 +61,7 @@ namespace tipi::cute_ext
           total_time_ms += test_ptr->get_test_duration().count();         
         }
 
-        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);  
-
-
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);
         auto count_suites_pass = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success(); });
         auto count_suites_fail = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success() == false; });  
 
@@ -73,9 +71,9 @@ namespace tipi::cute_ext
           << " - suites executed:     " << this->suites.size() << "\n"
           << " - suites passed:       " << count_suites_pass << "\n";
 
-        if(this->suite_failures > 0) { this->out << termcolor::red; }
+        if(count_suites_fail > 0) { this->out << termcolor::red; }
         this->out << " - suites failed:       " << count_suites_fail << "\n";
-        if(this->suite_failures > 0) { this->out << termcolor::reset; }
+        if(count_suites_fail > 0) { this->out << termcolor::reset; }
 
         this->out 
           << " - test cases executed: " << this->tests.size() << "\n"
@@ -84,11 +82,11 @@ namespace tipi::cute_ext
           << "\n";
  
           
-        if(this->suite_failures == 0) {
-          this->out << termcolor::green << util::symbols::suite_pass << " PASS";
+        if(count_suites_fail == 0) {
+          this->out << termcolor::green << util::symbols::suite_pass << " PASS " << util::symbols::suite_pass;
         } 
         else {
-          this->out << termcolor::red << util::symbols::suite_fail << " FAILED";
+          this->out << termcolor::red << util::symbols::suite_fail << " FAILED " <<  util::symbols::suite_fail;
         }
 
         this->out << termcolor::reset << std::endl;

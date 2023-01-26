@@ -63,7 +63,9 @@ namespace tipi::cute_ext
           total_time_ms += test_ptr->get_test_duration().count();         
         }
 
-        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);        
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);      
+        auto count_suites_pass = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success(); });
+        auto count_suites_fail = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success() == false; });    
 
         const auto INDENT = "  ";
     
@@ -72,8 +74,8 @@ namespace tipi::cute_ext
           << INDENT << INDENT << "tipi::cute_ext details \n"
           << INDENT << INDENT << "Test stats: \n"
           << INDENT << INDENT << " - suites executed:     " << this->suites.size() << "\n"
-          << INDENT << INDENT << " - suites passed:       " << this->suite_success << "\n"
-          << INDENT << INDENT << " - suites failed:       " << this->suite_failures << "\n"
+          << INDENT << INDENT << " - suites passed:       " << count_suites_pass << "\n"
+          << INDENT << INDENT << " - suites failed:       " << count_suites_fail << "\n"
           << INDENT << INDENT << "\n"
           << INDENT << INDENT << " - test cases executed: " << this->tests.size() << "\n"
           << INDENT << INDENT << " - total test time:     " << total_time_ms << "s\n" 
@@ -180,7 +182,12 @@ namespace tipi::cute_ext
         tco << ">\n"
             << INDENT 
             << "  " // +1/2
-            << "<failure message=\"" << mask_xml_chars(unit->info.str()) << "\"/>\n"
+            << "<failure />\n"
+            << INDENT
+            << "  " // +1/2
+            << "<system-out><![CDATA[\n"
+            << mask_xml_chars(unit->info.str())
+            << "]]></system-out>\n"
             << INDENT
             << "</testcase>\n";
       }
@@ -188,7 +195,12 @@ namespace tipi::cute_ext
         tco << ">\n"
             << INDENT 
             << "  " // +1/2 
-            << "<error message=\"" << mask_xml_chars(unit->info.str()) << "\" type=\"Unhandled exception\"/>\n"
+            << "<error type=\"Unhandled exception\"/>\n"
+            << INDENT
+            << "  " // +1/2
+            << "<system-out><![CDATA[\n"
+            << mask_xml_chars(unit->info.str())
+            << "]]></system-out>\n"
             << INDENT
             << "</testcase>\n";
       }
