@@ -38,8 +38,37 @@
 namespace tipi::cute_ext {
   using namespace std::string_literals;
 
+  enum ext_run_setting {
+    default       = 1 << 0,
+    force_linear  = 1 << 1,
+    before_all    = 1 << 2,
+    after_all     = 1 << 3
+  };
+
+  
+  inline ext_run_setting operator|(ext_run_setting a, ext_run_setting b)
+  {
+    return static_cast<ext_run_setting>(static_cast<int>(a) | static_cast<int>(b));
+  }
+
+  struct ext_suite : public cute::suite {
+
+
+    ext_run_setting run_setting = ext_run_setting::default;
+    
+    ext_suite(ext_run_setting r = ext_run_setting::default) 
+      : run_setting(r)
+    {        
+    }
+
+    ext_suite(const cute::suite &suite, ext_run_setting r = ext_run_setting::default) 
+      : cute::suite(suite)
+      , run_setting(r)
+    {        
+    }      
+  };
+
   namespace detail {
-    cute::null_listener dummy_null_listener{};
 
     enum run_unit_result {
       passed,
@@ -64,7 +93,7 @@ namespace tipi::cute_ext {
       else if(val == 2) return run_unit_result::errored;
       else if(val == 3) return run_unit_result::skipped;
       return run_unit_result::unknown;
-    }  
+    }
 
     template <typename app_listener_T = cute::null_listener>
     struct wrapper_options {
@@ -199,7 +228,7 @@ namespace tipi::cute_ext {
     std::optional<int> force_destructor_exit_code;
 
     /// @brief all test suites registered (could be just one depending on the run mode)
-    std::unordered_map<std::string, cute::suite> all_suites_{};
+    std::unordered_map<std::string, std::shared_ptr<ext_suite>> all_suites_{};
 
     std::atomic<size_t> test_exec_failures = 0;
     std::atomic<size_t> test_exec_errors = 0;
@@ -258,10 +287,10 @@ namespace tipi::cute_ext {
 
       auto& out = opt.get_output();
 
-      for(const auto &[i, s] : all_suites_) {
-        out << "Suite: '" << i << "'\n";
+      for(const auto &[suite_info, suite_ptr] : all_suites_) {
+        out << "Suite: '" << suite_info << "'\n";
 
-        for(const auto &test_case : s) {
+        for(const auto &test_case : *suite_ptr) {
           out << " + " << test_case.name() << "\n";
         }
 
@@ -431,7 +460,7 @@ namespace tipi::cute_ext {
           continue;
         }
         
-        for(const auto &test_case : suite) {
+        for(const auto &test_case : *suite) {
 
           // no need to spawn for disabled/skipped tests...
           if(filter_unit_enabled(test_case.name())) {
@@ -467,8 +496,8 @@ namespace tipi::cute_ext {
         }
 
         if(inserted) {
-          const cute::suite& suite = all_suites_.at(suite_name);
-          listener.suite_begin(suite, suite_name.c_str(), suite.size());
+          auto suite_ptr = all_suites_.at(suite_name);
+          listener.suite_begin(*suite_ptr, suite_name.c_str(), suite_ptr->size());
         }        
       };
       
@@ -504,8 +533,8 @@ namespace tipi::cute_ext {
             tests_running--;
           });                    
 
-          const cute::suite& suite = all_suites_.at(suite_name);
-          listener.test_start(nextit->get_cute_unit(), suite);
+          auto suite_ptr = all_suites_.at(suite_name);
+          listener.test_start(nextit->get_cute_unit(), *suite_ptr);
           return true;
         }
 
@@ -547,10 +576,10 @@ namespace tipi::cute_ext {
         }        
 
         // collect the results until all tasks of a suite are finished
-        for(const auto &[suite_name, suite] : all_suites_) {
+        for(const auto &[suite_name, suite_ptr] : all_suites_) {
           
           if(suite_finished(suite_name) && !was_suite_printed(suite_name)) {
-            print_suite(suite, suite_name);
+            print_suite(*suite_ptr, suite_name);
           }
         }
       }
@@ -659,17 +688,17 @@ namespace tipi::cute_ext {
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
     /// @param suite cute::suite
     /// @param info name
-    void register_suite(const cute::suite& suite, const std::string& name) {
+    void register_suite(const cute::suite& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::default) {
       if(opt.parallel_run || (opt.list_testcases && !opt.run_explicit)) {
-        all_suites_.insert({ name, suite });
+        all_suites_.insert({ name, std::make_shared<ext_suite>(suite, run_setting) });
       }
       else {        
         // in single-TC mode (as parallel mode child process) we skip every suite that is not the
         // expected one
         if(!opt.parallel_run || name == opt.auto_concurrent_suite) {
 
-          all_suites_ = std::unordered_map<std::string, cute::suite>{
-            { name, suite }
+          all_suites_ = std::unordered_map<std::string, std::shared_ptr<ext_suite>>{
+            { name, std::make_shared<ext_suite>(suite, run_setting) }
           };
 
           process_cmd();
@@ -692,7 +721,7 @@ namespace tipi::cute_ext {
     /// @param info name
     void operator()(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
   
-    bool run_suites(const std::unordered_map<std::string, cute::suite> &suites) {
+    bool run_suites(const std::unordered_map<std::string, std::shared_ptr<ext_suite>> &suites) {
 
       ext_listener& listener = opt.get_listener();
 
@@ -756,9 +785,11 @@ namespace tipi::cute_ext {
 
       bool result = true;
 
-      for(const auto &[suite_name, suite] : suites) {
+      for(const auto &[suite_name, suite_ptr] : suites) {
 
         if(filter_suite_enabled(suite_name)) {
+
+          const auto &suite = *suite_ptr;
 
           listener.suite_begin(suite, suite_name.c_str(), suite.size());
 
@@ -785,8 +816,8 @@ namespace tipi::cute_ext {
 
           if(!opt.parallel_child_run && opt.skipped_as_pass) {
             std::string skipped_suite_info = suite_name + " [SKIPPED]";
-            listener.suite_begin(suite, skipped_suite_info.c_str(), 0);
-            listener.suite_end(suite, skipped_suite_info.c_str());
+            listener.suite_begin(*suite_ptr, skipped_suite_info.c_str(), 0);
+            listener.suite_end(*suite_ptr, skipped_suite_info.c_str());
           }
         }        
       }        
