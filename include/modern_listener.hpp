@@ -168,7 +168,7 @@ namespace tipi::cute_ext
 
     virtual void parallel_render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
       if(this->render_suite_info) {
-        sot << " ● " << suite_ptr->name << "\n" << SEPARATOR_THICK << "\n";
+        sot << " " << util::symbols::suite_icon << " " << suite_ptr->name << "\n" << SEPARATOR_THICK << "\n";
       }
     }
 

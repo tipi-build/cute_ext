@@ -8,8 +8,8 @@ namespace tipi::cute_ext
   /// @brief virtual base 
   struct ext_listener {
 
-    ext_listener() {      
-    }
+    ext_listener() { }
+    virtual ~ext_listener() { };
 
     /// @brief Set the listener render options
     /// @param render_listener_info set to true if listener should output listener infos ("preamble" and "footer" typically)

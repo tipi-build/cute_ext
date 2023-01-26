@@ -102,8 +102,8 @@ namespace tipi::cute_ext {
       }
 
       wrapper_options(app_listener_T& listener, int argc, const char **argv, bool exit_on_destruction = true)
-        : exit_on_destruction(exit_on_destruction)
-        , args_(argc, const_cast<char **>(argv))
+        : args_(argc, const_cast<char **>(argv))
+        , exit_on_destruction(exit_on_destruction)
       {
         program_exe_path      = std::string(argv[0]);
 

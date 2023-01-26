@@ -145,7 +145,7 @@ namespace tipi::cute_ext
       listener_end = std::chrono::steady_clock::now();
     }
 
-    void set_render_options(bool render_listener_info, bool render_suite_info, bool render_test_info, bool immediate_mode) {
+    void set_render_options(bool render_listener_info, bool render_suite_info, bool render_test_info, bool immediate_mode) override {
       this->render_listener_info = render_listener_info;
       this->render_suite_info = render_suite_info;
       this->render_test_info = render_test_info;
@@ -201,7 +201,7 @@ namespace tipi::cute_ext
       }
     }
 
-    void test_start(cute::test const &test, const cute::suite& suite)
+    void test_start(cute::test const &test, const cute::suite& suite) override
     {
       auto suite_ptr = suites.at(&suite);
       const std::lock_guard<std::mutex> lock(tests_i_mutex);  
@@ -219,7 +219,7 @@ namespace tipi::cute_ext
       parallel_render_test_case_start(test_run_ptr);
     }
 
-    void test_success(cute::test const &test, char const *msg)
+    void test_success(cute::test const &test, char const *msg) override
     {
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Pass, msg);
@@ -227,7 +227,7 @@ namespace tipi::cute_ext
       parallel_render_test_case_end(test_run_ptr);
     }
 
-    void test_failure(cute::test const &test, cute::test_failure const &e)
+    void test_failure(cute::test const &test, cute::test_failure const &e) override
     {      
       std::stringstream ss{};
       ss << "[" << e.filename << ":" << e.lineno << "]\n" << e.reason;    
@@ -238,7 +238,7 @@ namespace tipi::cute_ext
       parallel_render_test_case_end(test_run_ptr);
     }
 
-    void test_error(cute::test const &test, char const *what)
+    void test_error(cute::test const &test, char const *what) override
     {
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Error, what);

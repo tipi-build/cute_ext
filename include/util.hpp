@@ -24,7 +24,7 @@ namespace tipi::cute_ext::util
       const auto suite_icon = "▶";
       const auto test_icon  = "●";      
 
-      const auto test_pass  = "✔ ";  // trailing space on purpose
+      const auto test_pass  = "✔ "; // trailing space on purpose
       const auto test_fail  = "❌";
       const auto test_error = "❌";
       

@@ -156,8 +156,7 @@ namespace tipi::cute_ext
      * 
      */
   public:
-    void test_failure(cute::test const &test, cute::test_failure const &e)
-    {
+    void test_failure(cute::test const &test, cute::test_failure const &e) override {
       call_test_failure(wrapped_, test, e);
     }
 
