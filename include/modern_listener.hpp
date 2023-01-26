@@ -14,6 +14,7 @@
 #include <cute/cute.h>
 #include <termcolor/termcolor.hpp>
 #include "parallel_listener.hpp"
+#include "util.hpp"
 
 namespace tipi::cute_ext
 {
@@ -42,7 +43,7 @@ namespace tipi::cute_ext
         std::string datetimenowstr{std::ctime(&now_tm)};
         datetimenowstr.pop_back();  // f*ck that last \n
 
-        this->out << "Awesome testing with " << termcolor::cyan << termcolor::bold << "tipi.build" << termcolor::reset << " + " << termcolor::yellow << "CUTE" << termcolor::reset << "\n"
+        this->out << util::symbols::run_icon << "Awesome testing with " << termcolor::cyan << termcolor::bold << "tipi.build" << termcolor::reset << " + " << termcolor::yellow << "CUTE" << termcolor::reset << "\n"
             << " -> Starting test at: " << datetimenowstr << " - [" <<  now.time_since_epoch().count() << "]\n"
             << SEPARATOR_THIN
             << "\n";
@@ -80,10 +81,10 @@ namespace tipi::cute_ext
  
           
         if(this->suite_failures == 0) {
-          this->out << termcolor::green << "✔  PASS";
+          this->out << termcolor::green << util::symbols::suite_pass << " PASS";
         } 
         else {
-          this->out << termcolor::red << "❌ FAILED";
+          this->out << termcolor::red << util::symbols::suite_fail << " FAILED";
         }
 
         this->out << termcolor::reset << std::endl;
@@ -92,7 +93,7 @@ namespace tipi::cute_ext
 
     virtual void parallel_render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
       if(this->render_test_info) {
-        tco << " ▶ " << util::padRight(unit->name, 40, ' ') << std::flush;
+        tco << " " << util::symbols::test_icon << " " << util::padRight(unit->name, 40, ' ') << std::flush;
       }        
     }
 
@@ -107,13 +108,13 @@ namespace tipi::cute_ext
     virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
 
       if(unit->outcome == test_run_outcome::Pass) {
-        tco << termcolor::green << util::padRight("✔  PASS", 12, ' ') << termcolor::reset;
+        tco << termcolor::green << util::symbols::test_pass << util::padRight(" PASS", 11, ' ') << termcolor::reset;
       }
       else if(unit->outcome == test_run_outcome::Fail) {
-        tco << termcolor::red << util::padRight("❌ FAILED", 11, ' ') << termcolor::reset;
+        tco << termcolor::red << util::symbols::test_fail << util::padRight(" FAILED", 11, ' ') << termcolor::reset;
       }
       else if(unit->outcome == test_run_outcome::Error) {
-        tco << termcolor::red << util::padRight("❌ ERROR", 11, ' ') << termcolor::reset;
+        tco << termcolor::red << util::symbols::test_error << util::padRight(" ERROR", 11, ' ') << termcolor::reset;
       }
       else {
         tco << termcolor::cyan << "O RUNNING/Unknown" << termcolor::reset;
@@ -177,12 +178,12 @@ namespace tipi::cute_ext
         if(suite_ptr->count_errors + suite_ptr->count_failures == 0) {
           this->suite_success++;
           sot << "\n"
-              << "  | Suite     ✔  PASS";
+              << "  | Suite     " << util::symbols::suite_pass << " PASS";
         }
         else {
           this->suite_failures++;
           sot << "\n"
-              << "  | Suite     ❌ FAILED";
+              << "  | Suite     " << util::symbols::suite_fail << " FAILED";
         }
 
         /* calulate how long the suite took */

@@ -17,6 +17,37 @@
 namespace tipi::cute_ext::util
 {
 
+  namespace symbols {
+    #ifdef CUTEEXT_SAFE_SYMBOLS
+      
+      const auto run_icon   = "▶";
+      const auto suite_icon = "▶";
+      const auto test_icon  = "●";      
+
+      const auto test_pass  = "✔ ";  // trailing space on purpose
+      const auto test_fail  = "❌";
+      const auto test_error = "❌";
+      
+      const auto suite_pass = "✔ ";
+      const auto suite_fail = "❌"; // trailing space on purpose
+
+    #else
+    
+      const auto run_icon   = "🏃";
+      const auto suite_icon = "🧫";
+      const auto test_icon  = "🧪";      
+
+      const auto test_pass  = "🟢";
+      const auto test_fail  = "🟥";
+      const auto test_error = "❌";
+      
+      const auto suite_pass = "🟢";
+      const auto suite_fail = "🟥";
+
+    #endif
+  }
+
+
   std::vector<std::string> split(const std::string &s, char delim)
   {
     std::vector<std::string> result;

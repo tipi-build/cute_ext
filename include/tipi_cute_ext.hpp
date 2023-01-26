@@ -202,14 +202,7 @@ namespace tipi::cute_ext {
 
     std::atomic<size_t> test_exec_failures = 0;
     std::atomic<size_t> test_exec_errors = 0;
-
-
-    /// @brief Sums test_exec_failures and test_exec_errors
-    /// @return 
-    size_t get_total_test_exec_fail() {
-      return test_exec_errors + test_exec_failures;
-    }
-    
+   
     /// @brief Create a filtering lambda/fn given a (regex) string
     /// @param pattern 
     /// @return 
@@ -590,6 +583,24 @@ namespace tipi::cute_ext {
     }
 
   public:
+
+    /// @brief Sums test_exec_failures and test_exec_errors
+    /// @return 
+    size_t get_total_test_exec_fail() {
+      return test_exec_errors + test_exec_failures;
+    }
+
+    /// @brief Returns the total number of failures
+    /// @return 
+    size_t get_total_failure_count() {
+      return test_exec_failures;
+    }
+
+    /// @brief Returns the total number of errors
+    /// @return 
+    size_t get_total_error_count() {
+      return test_exec_failures;
+    }
     
 
     wrapper(app_listener_T& listener, int argc, const char **argv, bool exit_on_destruction = true)
