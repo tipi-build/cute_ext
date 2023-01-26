@@ -16,7 +16,7 @@ public:
 
   void Test3_throws()
   {
-    throw std::runtime_error("Nooo");
+    int f = std::stoi("ABBA");  // Throws: no conversion
   }
 };
 

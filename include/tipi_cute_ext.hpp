@@ -14,6 +14,7 @@
 #include <future>
 #include <optional>
 #include <type_traits>
+#include <typeinfo>
 
 #include <cute/cute.h>
 
@@ -492,7 +493,7 @@ namespace tipi::cute_ext {
             }
             else if(urr == detail::run_unit_result::failed) {
               tests_failed++;
-              cute::test_failure fail_info(task.get_output().c_str(), "", 0);
+              cute::test_failure fail_info(task.get_output().c_str(), "", -1);
               listener.test_failure(task.get_cute_unit(), fail_info);
             }
             else {
@@ -732,14 +733,20 @@ namespace tipi::cute_ext {
         } catch(const cute::test_failure & e){
           listener.test_failure(t, e);
           result = detail::run_unit_result::failed;
-        } catch(const std::exception & exc){
-          listener.test_error(t, cute::demangle(exc.what()).c_str());
-          result = detail::run_unit_result::errored;
         } catch(std::string & s){
           listener.test_error(t, s.c_str());
           result = detail::run_unit_result::errored;
         } catch(const char *&cs) {
           listener.test_error(t, cs);
+          result = detail::run_unit_result::errored;
+        } catch(const std::exception& e) {
+          std::stringstream ss_err;
+          ss_err  << "--- uncaught " << cute::demangle(typeid(e).name()) << "\n"
+                  << "--- exception message start ---\n"
+                  << e.what() << "\n"
+                  << "--- exception message end ---";
+
+          listener.test_error(t, ss_err.str().c_str());
           result = detail::run_unit_result::errored;
         } catch(...) {
           listener.test_error(t, "unknown exception thrown");
