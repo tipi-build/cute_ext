@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include <atomic>
+#include <algorithm>
 
 #include <termcolor/termcolor.hpp>
 #include <cute/cute.h>
@@ -17,6 +18,22 @@ namespace tipi::cute_ext
   struct modern_xml_listener : public parallel_listener
   {
     protected:
+
+    /// @brief replaces ]]> with ]]]]><![CDATA[> in CDATA sections
+    /// @param in 
+    /// @return 
+    std::string escape_cdata(std::string in) {
+      const std::string search = "]]>";
+      const std::string replace = "]]]]><![CDATA[>";
+      
+      size_t pos = 0;
+      while((pos = in.find(search, pos)) != std::string::npos) {
+        in.replace(pos, search.length(), replace);
+        pos += replace.length();
+      }
+
+      return in;
+    }
 
     std::string mask_xml_chars(std::string in){
 			std::string::size_type pos=0;
@@ -186,7 +203,7 @@ namespace tipi::cute_ext
             << INDENT
             << "  " // +1/2
             << "<system-out><![CDATA[\n"
-            << mask_xml_chars(unit->info.str())
+            << escape_cdata(unit->info.str())
             << "]]></system-out>\n"
             << INDENT
             << "</testcase>\n";
@@ -199,7 +216,7 @@ namespace tipi::cute_ext
             << INDENT
             << "  " // +1/2
             << "<system-out><![CDATA[\n"
-            << mask_xml_chars(unit->info.str())
+            << escape_cdata(unit->info.str())
             << "]]></system-out>\n"
             << INDENT
             << "</testcase>\n";

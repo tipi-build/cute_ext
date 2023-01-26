@@ -518,8 +518,7 @@ namespace tipi::cute_ext {
         return count_tests == count_done;
       };
 
-      std::vector<std::string> suites_printed{};
-      
+      std::vector<std::string> suites_printed{};      
 
       auto was_suite_printed = [&](const std::string suite_name) {
         return std::find(suites_printed.begin(), suites_printed.end(), suite_name) != suites_printed.end();
@@ -533,7 +532,6 @@ namespace tipi::cute_ext {
         suites_printed.push_back(suite_name);        
         listener.suite_end(suite, suite_name.c_str());
       };
-
 
       /** The actual running thing */
       listener.set_render_options(true, true, true, false);
