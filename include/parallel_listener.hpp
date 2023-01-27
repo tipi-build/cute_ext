@@ -46,6 +46,8 @@ namespace tipi::cute_ext
       , outcome(test_run_outcome::Unknown)
       , suite_run(suite_ptr)
     {
+      out << termcolor::colorize;
+      info << termcolor::colorize;
     }
 
     void done(test_run_outcome outcome, const std::string &info);
@@ -79,6 +81,8 @@ namespace tipi::cute_ext
       , start(std::chrono::steady_clock::now())
       , count_expected(number_of_tests)
     {
+      out << termcolor::colorize;
+      info << termcolor::colorize;
     }
 
     void done(std::string info) {
@@ -161,6 +165,17 @@ namespace tipi::cute_ext
 
     std::chrono::steady_clock::time_point listener_start;
     std::optional<std::chrono::steady_clock::time_point> listener_end;
+
+
+    // one mutex per lockable output stream
+    std::mutex out_mutexes_mtx{};
+    std::unordered_map<const std::ostream*, std::mutex> out_mutexes{};
+
+    virtual std::shared_ptr<std::lock_guard<std::mutex>> acquirex(const std::ostream &os) {
+      std::lock_guard<std::mutex> mtx_map_guard(out_mutexes_mtx);
+      //std::cerr << "Lock address: " << &os << std::endl;
+      return std::make_shared<std::lock_guard<std::mutex>>(out_mutexes[&os]);
+    }
     
   public:
     parallel_listener(std::ostream &os = std::cerr)
@@ -201,6 +216,7 @@ namespace tipi::cute_ext
       }
 
       if(render_immediate_mode) {
+        const auto lock = this->acquirex(out);
         parallel_render_suite_header(out, suite_run_ptr);
       }
     }
@@ -212,11 +228,13 @@ namespace tipi::cute_ext
         suite_ptr->done(info);      
 
         auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
+        const auto lock = this->acquirex(sot);
 
         if(!render_immediate_mode) {
           parallel_render_suite_header(sot, suite_ptr);
 
           for(const auto &t : suite_ptr->tests) {
+            const auto testout_guard = this->acquirex(t->out);   // makes shure it was completely written
             sot << t->out.str();
           }
         }
@@ -224,6 +242,7 @@ namespace tipi::cute_ext
         parallel_render_suite_footer(sot, suite_ptr);
 
         if(!render_immediate_mode) {
+          const auto lock = this->acquirex(out);
           out << suite_ptr->out.str();
         }
       }
@@ -234,6 +253,8 @@ namespace tipi::cute_ext
       auto suite_ptr = suites.at(&suite);
       const std::lock_guard<std::mutex> lock(tests_i_mutex);  
       auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);  
+      
+      //std::cout << "🟥 Test <" << test.name() << "> :: " << &test << "(th:" << std::this_thread::get_id() << ")" << std::endl;
 
       auto er = tests.emplace(&test, test_run_ptr);
       if(er.second) {
