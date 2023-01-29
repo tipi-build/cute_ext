@@ -484,7 +484,6 @@ namespace tipi::cute_ext {
       
       auto next_task_it = [&]() {        
         if(linear_mode) {
-          //std::cout << "Getting linear mode test" << std::endl;
           return std::find_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.was_started() == false && t.get_suite_name() == linear_mode_suite_name; });
         }
         else {
@@ -624,8 +623,6 @@ namespace tipi::cute_ext {
       auto start_next = [&]() {
         auto nextit = next_task_it();
 
-        std::cout << "start_next()" << linear_mode << std::endl;
-
         if(nextit != tasks.end()) {
 
           const std::string& suite_name = nextit->get_suite_name();
@@ -644,8 +641,7 @@ namespace tipi::cute_ext {
             if(linear_mode == false) {
               // wait for all running tasks to finish...
               while(tests_running > 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));  // TODO: 1 or 10ms          
-                std::cout << "Print" << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));  // TODO: 1 or 10ms
               }
 
               print_finished_suites();
@@ -661,7 +657,8 @@ namespace tipi::cute_ext {
           tests_running++;
           mark_suite_started(suite_name);
 
-          nextit->start([&](const auto &task) {
+          /**note: CLANG requires us to copy capture unit_force_linear_mode (probably because of a thread locality specific behavior) */
+          nextit->start([&, unit_force_linear_mode](const auto &task) {
 
             auto urr = task.get_run_unit_result();            
 
@@ -742,7 +739,7 @@ namespace tipi::cute_ext {
           print_finished_suites();
         }
 
-        //std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
 
       if(force_destructor_exit_code.value_or(0) == 0) { 
