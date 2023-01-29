@@ -853,7 +853,7 @@ namespace tipi::cute_ext {
       else {        
         // in single-TC mode (as parallel mode child process) we skip every suite that is not the
         // expected one
-        if(opt.parallel_child_run && name == opt.auto_concurrent_suite) {
+        if(!opt.parallel_run || (opt.parallel_child_run && name == opt.auto_concurrent_suite)) {
 
           all_suites_ = std::unordered_map<std::string, std::shared_ptr<ext_suite>>{
             { name, suite_ptr }
