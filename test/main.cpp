@@ -110,6 +110,16 @@ void testfn(int argc, const char **argv) {
     //ynull_listener lis{};
 	
     auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
+    
+    std::atomic<size_t> counter = 0;
+    runner.set_on_before_autoparallel_child_process([&](const auto& suitename, const auto& unitname, auto& args, auto& env) {
+        std::stringstream ss{};
+
+        ss << "DATA: " << suitename << " - " << unitname << " - counter: " << counter++;
+        
+        
+        env.emplace("TEST_VARIABLE", ss.str());
+    });
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
@@ -164,6 +174,13 @@ void testfn(int argc, const char **argv) {
 }
 
 int main(int argc, const char **argv) {
+
+    auto r = std::getenv("TEST_VARIABLE");
+
+    if(r) {
+        std::cout << "GOT TEST_VARIABLE=" << r << std::endl;
+    }
+
     testfn(argc, argv);
     return 0;
 }

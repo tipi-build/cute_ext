@@ -6,8 +6,8 @@
     "sailormoon/flags": {
         "@": ":4fe826161e0dcb093278126ae08b0b2cbab0e2f7"
     },
-    "eidheim/tiny-process-library": {
-        "@": ":5bc47531a97f80ac07092ac3ed56a26139c748b3",
+    "GerHobbelt/tiny-process-library": {
+        "@": ":2f7b3cf6d9972d096a77863e31c854f80194927d",
         "x:windows": ["test/", "example.cpp", "process_unix.cpp"],
         "x:windows-cxx17": ["test/", "example.cpp", "process_unix.cpp"],
         "x:vs-16-2019-win64-cxx17": ["test/", "example.cpp", "process_unix.cpp"],

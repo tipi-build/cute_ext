@@ -217,7 +217,7 @@ namespace tipi::cute_ext
 
         sot << "  | ";
         if(suite_ptr->count_success == suite_ptr->count_expected) { sot << termcolor::green; }
-        sot << "Pass      " << suite_ptr->count_success << "\n";
+        sot << "Pass      " << suite_ptr->count_success << termcolor::reset << "\n";
         if(suite_ptr->count_success == suite_ptr->count_expected) { sot << termcolor::reset; } 
 
         if(suite_ptr->count_failures > 0) { 

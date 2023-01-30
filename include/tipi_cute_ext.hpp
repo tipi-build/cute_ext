@@ -241,7 +241,21 @@ namespace tipi::cute_ext {
 
     std::atomic<size_t> test_exec_failures = 0;
     std::atomic<size_t> test_exec_errors = 0;
-   
+
+    
+    /// @brief callback used to customize autoparallel process start parameters and environment prior to launching child processes
+    /// @param const std::string& name of the suite
+    /// @param const std::string& name of the test unit
+    /// @param std::vector<std::string>& arguments for the process start
+    /// @param std::map<std::string, std::string>& environment variable map
+    std::function<
+      void(
+        const std::string&, 
+        const std::string&, 
+        std::vector<std::string>&, 
+        std::unordered_map<std::string, std::string>&
+      )> on_before_start_process_ = [](const auto& suitename, const auto& unitname, auto& args, auto& env) {};
+
     /// @brief Create a filtering lambda/fn given a (regex) string
     /// @param pattern 
     /// @return 
@@ -313,12 +327,20 @@ namespace tipi::cute_ext {
     // wraps all the control logic for that
     struct autoparallel_testcase {
 
-      autoparallel_testcase(const std::string& base_cmd, const std::string &suite, const std::string &unit, const cute::test &cute_unit)
+      autoparallel_testcase(
+        const std::vector<std::string>& base_cmd, 
+        const std::unordered_map<std::string, std::string> &base_env, 
+        const std::string &suite, 
+        const std::string &unit, 
+        const cute::test &cute_unit,
+        std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> on_before_start_process)
         : suite_(suite)
         , unit_(unit)
         , process_base_cmd_(base_cmd)
+        , process_base_env_(base_env)
         , cute_unit_(cute_unit)
         , out_ss_ptr_{std::make_shared<std::stringstream>()}
+        , on_before_start_process_(on_before_start_process)
       {          
       }
 
@@ -374,13 +396,31 @@ namespace tipi::cute_ext {
     private:      
 
       void run_process(std::function<void(const autoparallel_testcase&)> cb) {
-        std::stringstream cmd_ss{};
+        
+        /* process args */
+        std::vector<std::string> cmd_args{};
+
         #if defined(_WIN32) && !defined(MSYS_PROCESS_USE_SH)
-        cmd_ss << "cmd /c ";
+        cmd_args.push_back("cmd /c");
         #endif
 
-        cmd_ss << process_base_cmd_ << " --parallel-suite=\"" << suite_ << "\" --parallel-unit=\"" << unit_ << "\"";
+        // add all of process_base_cmd_ to cmd_args
+        std::copy(process_base_cmd_.begin(), process_base_cmd_.end(), std::back_inserter(cmd_args));
 
+        // add the parallal-suite arg & value
+        cmd_args.push_back("--parallel-suite");
+        cmd_args.push_back(suite_);
+
+        cmd_args.push_back("--parallel-unit");
+        cmd_args.push_back(unit_);
+
+        /* process env */
+        std::unordered_map<std::string, std::string> cmd_env(process_base_env_);
+
+        // call customization cb
+        on_before_start_process_(suite_, unit_, cmd_args, cmd_env);
+
+        /* process output */
         auto loc_ss_ptr = out_ss_ptr_;
 
         try { 
@@ -390,10 +430,11 @@ namespace tipi::cute_ext {
           };
 
           process_ptr = std::make_shared<TinyProcessLib::Process>(
-            cmd_ss.str(), 
-            "",         /* env */
-            processio,  /*stdout */
-            processio,  /*stderr */
+            cmd_args,   /* cmd + arg */
+            "",         /* path */
+            cmd_env,    /* env */
+            processio,  /* stdout */
+            processio,  /* stderr */
             false       /* don't open stdin */
           );
 
@@ -424,7 +465,8 @@ namespace tipi::cute_ext {
       bool success_ = false;
       std::string suite_;
       std::string unit_;
-      std::string process_base_cmd_;
+      std::vector<std::string> process_base_cmd_;
+      std::unordered_map<std::string, std::string> process_base_env_;
       const cute::test &cute_unit_;
       
       std::shared_ptr<std::stringstream> out_ss_ptr_;
@@ -432,6 +474,8 @@ namespace tipi::cute_ext {
       std::optional<int> process_exit_code{};
 
       std::shared_ptr<std::thread> process_thread_ptr;
+
+      std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> on_before_start_process_;
     };
 
     bool cmd_autoparallel() {
@@ -442,22 +486,24 @@ namespace tipi::cute_ext {
       auto filter_unit_enabled = make_filter_fn(opt.filter_unit_value);
 
       // build the base command
-      std::string base_process_cmd{};
+      std::vector<std::string> base_process_cmd_args{};
 
       {
-        std::stringstream cmd_ss{};
-        cmd_ss << opt.program_exe_path;
+        base_process_cmd_args.push_back(opt.program_exe_path);
 
         if(opt.listener_arg.empty() == false) {
-        cmd_ss << " --listener=\"" << opt.listener_arg << "\"";
+          base_process_cmd_args.push_back("--listener");
+          base_process_cmd_args.push_back(opt.listener_arg);
         }
 
         if(opt.force_cli_listener) {
-          cmd_ss << " --force-listener ";
+          base_process_cmd_args.push_back("--force-listener");
         }
-
-        base_process_cmd = cmd_ss.str();
       }
+
+      // retrieve the full environment map of the current process
+      // this will be used as base for the per-child-process environment map
+      auto base_env = util::get_current_ENVIRONMENT();
 
       // collect all the tests
       std::vector<autoparallel_testcase> tasks{};
@@ -473,7 +519,7 @@ namespace tipi::cute_ext {
 
           // no need to spawn for disabled/skipped tests...
           if(filter_unit_enabled(test_case.name())) {
-            tasks.emplace_back(base_process_cmd, suite_name, test_case.name(), test_case);
+            tasks.emplace_back(base_process_cmd_args, base_env, suite_name, test_case.name(), test_case, on_before_start_process_);
           }
         }
       }
@@ -842,10 +888,17 @@ namespace tipi::cute_ext {
 
       return true;
     }
+
+    /// @brief Callback used to customize the startup command of every child process 
+    /// launched in auto-parallel mode
+    /// @param cb void fn with parameters: [const std::string&] suite_name, [const std::string&] unit_name, [std::vector<std::string>&] cmd_args, [std::unordered_map<std::string, std::string>&] environment_variables
+    void set_on_before_autoparallel_child_process(std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> cb) {
+      on_before_start_process_ = cb;
+    }
     
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
     /// @param suite cute::suite
-    /// @param info name
+    /// @param info     
     void register_suite(std::shared_ptr<ext_suite> suite_ptr, const std::string& name) {
       if(opt.parallel_run || (opt.list_testcases && !opt.run_explicit)) {
         all_suites_.insert({ name, suite_ptr });
@@ -864,9 +917,11 @@ namespace tipi::cute_ext {
       }     
     }
 
-    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
-    /// @param suite cute::suite
-    /// @param info name
+    /// @brief  Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite the cute::suite to execute
+    /// @param name name of the suite
+    /// @param run_setting ext_run_setting::normal / ext_run_setting::before_all / ext_run_setting::after_all
+    /// @param force_linear set to true to force running this suite in linear mode
     void register_suite(const cute::suite&& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
       register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
     }
