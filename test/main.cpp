@@ -113,12 +113,32 @@ void testfn(int argc, const char **argv) {
     
     std::atomic<size_t> counter = 0;
     runner.set_on_before_autoparallel_child_process([&](const auto& suitename, const auto& unitname, auto& args, auto& env) {
-        std::stringstream ss{};
+        /**
+         * Example for GCOV 
+         * 
+         * Doc excerpt from https://gcc.gnu.org/onlinedocs/gcc-5.2.0/gcc/Cross-profiling.html :
+         *
+         * - GCOV_PREFIX contains the prefix to add to the absolute paths in the object file. 
+         *   Prefix can be absolute, or relative. The default is no prefix.
+         * - GCOV_PREFIX_STRIP indicates the how many initial directory names to strip off the 
+         *   hardwired absolute paths. Default value is 0.
+         * 
+         * Note: If GCOV_PREFIX_STRIP is set without GCOV_PREFIX is undefined, then a relative 
+         * path is made out of the hardwired absolute paths. 
+         * 
+         * For example, if the object file /user/build/foo.o was built with -fprofile-arcs, 
+         * the final executable will try to create the data file /user/build/foo.gcda when 
+         * running on the target system. This will fail if the corresponding directory does 
+         * not exist and it is unable to create it. This can be overcome by, for example, setting 
+         * the environment as ‘GCOV_PREFIX=/target/run’ and ‘GCOV_PREFIX_STRIP=1’. Such a setting 
+         * will name the data file /target/run/build/foo.gcda. 
+         */
 
-        ss << "DATA: " << suitename << " - " << unitname << " - counter: " << counter++;
-        
-        
-        env.emplace("TEST_VARIABLE", ss.str());
+        // one dir per test unit - perhaps this should be further separated in order to have all the data in
+        // a "per test run" structure - perhaps known by launch configuration to the test executable
+        // and specc'ed by the CI during a run (like a Jenkins job ID)
+        env.emplace("GCOV_PREFIX", "/tmp/tipi-cute-gcov/" + std::to_string(counter++));  
+        env.emplace("GCOV_PREFIX_STRIP", "2");  // needs to be calculated based on where the .obj files reside...
     });
 
     cute::suite s1{};
@@ -174,13 +194,6 @@ void testfn(int argc, const char **argv) {
 }
 
 int main(int argc, const char **argv) {
-
-    auto r = std::getenv("TEST_VARIABLE");
-
-    if(r) {
-        std::cout << "GOT TEST_VARIABLE=" << r << std::endl;
-    }
-
     testfn(argc, argv);
     return 0;
 }
