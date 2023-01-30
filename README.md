@@ -194,7 +194,6 @@ int main(int argc, const char *argv[])
    ...
 ```
 
-
 Work with the new API only
 --------------------------
 
@@ -223,6 +222,81 @@ int main(int argc, char *argv[]){
   return 0;
 }
 ```
+
+Controlling the test case execution in auto-parallel mode
+---------------------------------------------------------
+
+Executing the test suites in auto-parallel mode can uncover execution order dependencies and/or shared state issues, which can - in some cases - be due to the test design or system architecture.
+
+To enable using the automatic parallelization on parts of the test suite only whitout creating additional test executables one can add a options to force executing singular suites in linear mode, and or forcing a point in time of execution (`tipi::cute_ext::ext_run_setting::before_all`, `tipi::cute_ext::ext_run_setting::normal` or `tipi::cute_ext::ext_run_setting::after_all`).
+
+Forcing the execution to `force_linear` has the following behavior:
+
+- waiting for all tests running in parallel mode to finish
+- run the `force_linear`'ed suite one test case at a time, in the order their are added to the suite
+- switch back to auto-parallel mode after all tests are finished
+
+**NOTE:** The run settings only apply when running the test executable in `--parallel` mode.
+
+- `tipi::cute_ext::ext_run_setting::normal`: default / no change
+- `tipi::cute_ext::ext_run_setting::before_all`: the registered suite is executed before all `normal` ones. If multiple suites are registered as `before_all` the registration order in that subset is taken into account again.
+- `tipi::cute_ext::ext_run_setting::after_all`: the registered suite is executed after all `normal` ones. If multiple suites are registered as `after_all` the registration order in that subset is taken into account again.
+
+
+#### Order of execution example:
+
+The order of execution of the following sample in auto-parallel mode would be
+
+```
+                    // ext_run_setting  ; force_linear
+      S.3           // ::before_all     ; false
+       |  S.4       // ::before_all     ; false
+       \   /        //
+        S.4         // ::before_all     ; *true*
+       /   \        //
+      S.1  |        // ::normal         ; false
+       |  S.2       // ::normal         ; false
+       \   /        // 
+        S.6         // ::normal         ; *true*
+        /|\         //
+   /---+-+-+---\    //
+   |   |   |   |    //
+  S.7  |   |   |    //
+   |  S.8  |   |    // ::after_all      ; false
+   |   |  S.9  |    // ::after_all      ; false
+   |   |   |  S.10  // ::after_all      ; false
+   |   |   |   |    // 
+   \---+-+-+---/    //
+        \|/         // 
+        S.11        // ::after_all      ; *true*
+```
+
+```cpp
+// [snip] suites declaration
+using tipi::cute_ext;
+
+auto runner = cute_ext::makeRunner(lis, argc, argv);
+
+/// @brief  Register a new suite and - depending on CLI arguments - run the suite immediately
+/// @param suite the cute::suite to execute
+/// @param name name of the suite
+/// @param run_setting ext_run_setting::normal / ext_run_setting::before_all / ext_run_setting::after_all
+/// @param force_linear set to true to force running this suite in linear mode
+/// void register_suite(const cute::suite& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false)
+
+runner.register_suite(suite_1, "Suite 1");  /* implicit, run_setting = ext_run_setting::normal, force_linear = false */
+runner.register_suite(suite_2, "Suite 2");
+runner.register_suite(suite_3, "Suite 3",   ext_run_setting::before_all,  false);
+runner.register_suite(suite_4, "Suite 4",   ext_run_setting::before_all,  false);
+runner.register_suite(suite_5, "Suite 5",   ext_run_setting::before_all,  true);
+runner.register_suite(suite_6, "Suite 6",   ext_run_setting::normal,      true);
+runner.register_suite(suite_7, "Suite 7",   ext_run_setting::normal,      false);
+runner.register_suite(suite_8, "Suite 8",   ext_run_setting::after_all,   false);
+runner.register_suite(suite_8, "Suite 9",   ext_run_setting::after_all,   false);
+runner.register_suite(suite_8, "Suite 10",  ext_run_setting::after_all,   false);
+runner.register_suite(suite_9, "Suite 11",  ext_run_setting::after_all,   true);
+```
+
 
 Licence
 -------
