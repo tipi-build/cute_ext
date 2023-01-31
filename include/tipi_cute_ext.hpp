@@ -895,6 +895,12 @@ namespace tipi::cute_ext {
     void set_on_before_autoparallel_child_process(std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> cb) {
       on_before_start_process_ = cb;
     }
+
+    /// @brief Returns true if the passed args signify this runner is executing in autoparallel_child mode
+    /// @return 
+    bool is_autoparallel_child() {
+      return opt.parallel_child_run;
+    }
     
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
     /// @param suite cute::suite

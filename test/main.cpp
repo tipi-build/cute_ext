@@ -17,6 +17,20 @@
 
 #include <termcolor/termcolor.hpp>
 
+#include <filesystem>
+
+#if defined(_WIN32)
+
+#include <windows.h>
+#include <processthreadsapi.h>
+
+#else
+
+#include <sys/types.h>
+#include <unistd.h>
+
+#endif
+
 using namespace std::chrono_literals;
 
 extern cute::suite make_suite();
@@ -110,36 +124,72 @@ void testfn(int argc, const char **argv) {
     //ynull_listener lis{};
 	
     auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
-    
-    std::atomic<size_t> counter = 0;
-    runner.set_on_before_autoparallel_child_process([&](const auto& suitename, const auto& unitname, auto& args, auto& env) {
-        /**
-         * Example for GCOV 
-         * 
-         * Doc excerpt from https://gcc.gnu.org/onlinedocs/gcc-5.2.0/gcc/Cross-profiling.html :
-         *
-         * - GCOV_PREFIX contains the prefix to add to the absolute paths in the object file. 
-         *   Prefix can be absolute, or relative. The default is no prefix.
-         * - GCOV_PREFIX_STRIP indicates the how many initial directory names to strip off the 
-         *   hardwired absolute paths. Default value is 0.
-         * 
-         * Note: If GCOV_PREFIX_STRIP is set without GCOV_PREFIX is undefined, then a relative 
-         * path is made out of the hardwired absolute paths. 
-         * 
-         * For example, if the object file /user/build/foo.o was built with -fprofile-arcs, 
-         * the final executable will try to create the data file /user/build/foo.gcda when 
-         * running on the target system. This will fail if the corresponding directory does 
-         * not exist and it is unable to create it. This can be overcome by, for example, setting 
-         * the environment as ‘GCOV_PREFIX=/target/run’ and ‘GCOV_PREFIX_STRIP=1’. Such a setting 
-         * will name the data file /target/run/build/foo.gcda. 
-         */
 
-        // one dir per test unit - perhaps this should be further separated in order to have all the data in
-        // a "per test run" structure - perhaps known by launch configuration to the test executable
-        // and specc'ed by the CI during a run (like a Jenkins job ID)
-        env.emplace("GCOV_PREFIX", "/tmp/tipi-cute-gcov/" + std::to_string(counter++));  
-        env.emplace("GCOV_PREFIX_STRIP", "2");  // needs to be calculated based on where the .obj files reside...
-    });
+
+    if(!runner.is_autoparallel_child()) {
+    
+        auto get_pid = []() -> size_t {
+            #if defined(_WIN32)
+            return ::GetCurrentProcessId();
+            #else
+            return getpid(void);
+            #endif
+        };
+
+        auto clean_path = [](std::string path) {
+            static std::string forbidden_path_chars( "!$%&()[]{}§*+#:?\"<>|" );
+            std::transform(
+                path.begin(), path.end(), path.begin(), 
+                [&](char c) { return forbidden_path_chars.find(c) != std::string::npos ? '_' : c; }
+            );
+
+            return path;
+        };
+
+        auto current_pid = get_pid();
+
+        std::stringstream pathbase_ss{};
+
+        #if defined(_WIN32)
+        pathbase_ss << "C:/temp/"; 
+        #else
+        pathbase_ss << "/tmp/"; 
+        #endif
+        
+        pathbase_ss << "cute_ext_cov_" << current_pid << "/";
+        std::string pathbase = pathbase_ss.str();
+        std::filesystem::create_directories(pathbase);
+
+        std::cout << "\n---\n" << "ℹ️ All coverage analysis files will be written to: " << pathbase << "\n---\n" << std::endl;
+
+        runner.set_on_before_autoparallel_child_process([&, pathbase](const auto& suite_name, const auto& unit_name, auto& args, auto& env) -> void {
+            // place all the .gcda files as: /tmp/cute_ext_cov_{current_pid}/{suite_name}-{unit_name}/<gcov-generate-filename.gcda>
+            std::stringstream path_ss{};
+            path_ss << pathbase << clean_path(suite_name) << "-" << clean_path(unit_name); 
+
+            std::string path = path_ss.str();
+            std::filesystem::create_directories(path);           
+
+            env.emplace("GCOV_PREFIX", path);  
+            env.emplace("GCOV_PREFIX_STRIP", "10000");  // clear all gcov generated folders
+        });
+
+    }
+    else {
+        std::cout << "ENV ℹ️ : ";
+        auto env_gcov_prefix = std::getenv("GCOV_PREFIX");
+        if(env_gcov_prefix) {
+            std::cout << "GCOV_PREFIX=" << env_gcov_prefix << " ";
+        }
+
+        auto env_gcov_prefix_strip = std::getenv("GCOV_PREFIX_STRIP");
+
+        if(env_gcov_prefix_strip) {
+            std::cout << "GCOV_PREFIX_STRIP=" << env_gcov_prefix_strip << " ";
+        }
+
+        std::cout << "(END)" << std::endl;
+    }
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
