@@ -796,11 +796,11 @@ namespace tipi::cute_ext {
       return tests_failed == 0;
     }
 
-    bool cmd_run_base() {
+    bool cmd_run_base(std::optional<std::string> suite_to_run = std::nullopt) {
       bool success = true;
 
       try {
-        success = run_suites(all_suites_);
+        success = run_suites(suite_to_run);
       }
       catch(const std::exception& ex) {
         opt.get_output() << "tipi cute_ext failed: " << ex.what() << "\n";
@@ -856,7 +856,7 @@ namespace tipi::cute_ext {
       }
     }
 
-    bool process_cmd() {      
+    bool process_cmd(std::optional<std::string> suite_to_run = std::nullopt) {      
 
       if(opt.show_help) {
         print_help();
@@ -873,7 +873,7 @@ namespace tipi::cute_ext {
       }
 
       if(opt.parallel_child_run) {
-        return cmd_run_base();
+        return cmd_run_base(suite_to_run);
       }
 
       // run the suite automatically if no additional params are provided OR and explicit --run is present
@@ -883,7 +883,7 @@ namespace tipi::cute_ext {
           return cmd_autoparallel();
         }      
 
-        return cmd_run_base();        
+        return cmd_run_base(suite_to_run);        
       }
 
       return true;
@@ -906,19 +906,21 @@ namespace tipi::cute_ext {
     /// @param suite cute::suite
     /// @param info     
     void register_suite(std::shared_ptr<ext_suite> suite_ptr, const std::string& name) {
+      all_suites_.insert({ name, suite_ptr });
+      
       if(opt.parallel_run || (opt.list_testcases && !opt.run_explicit)) {
-        all_suites_.insert({ name, suite_ptr });
+        // done
       }
       else {        
         // in single-TC mode (as parallel mode child process) we skip every suite that is not the
         // expected one
         if(!opt.parallel_run || (opt.parallel_child_run && name == opt.auto_concurrent_suite)) {
 
-          all_suites_ = std::unordered_map<std::string, std::shared_ptr<ext_suite>>{
+          /*all_suites_ = std::unordered_map<std::string, std::shared_ptr<ext_suite>>{
             { name, suite_ptr }
-          };
+          };*/
 
-          process_cmd();
+          process_cmd(name);
         }
       }     
     }
@@ -969,7 +971,7 @@ namespace tipi::cute_ext {
 
 
   
-    bool run_suites(const std::unordered_map<std::string, std::shared_ptr<ext_suite>> &suites) {
+    bool run_suites(std::optional<std::string> suite_to_run = std::nullopt) {
 
       ext_listener& listener = opt.get_listener();
 
@@ -1033,9 +1035,9 @@ namespace tipi::cute_ext {
 
       bool result = true;
 
-      for(const auto &[suite_name, suite_ptr] : suites) {
+      for(const auto &[suite_name, suite_ptr] : all_suites_) {
 
-        if(filter_suite_enabled(suite_name)) {
+        if((filter_suite_enabled(suite_name) && !suite_to_run.has_value()) || (suite_to_run.has_value() && suite_name == suite_to_run.value())) {
 
           const auto &suite = *suite_ptr;
 

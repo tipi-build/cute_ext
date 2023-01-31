@@ -61,7 +61,7 @@ public:
     }
 
     int anotherTest(){
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
         ASSERT_EQUAL(42, 42);
         return 0;
     }
@@ -132,7 +132,7 @@ void testfn(int argc, const char **argv) {
             #if defined(_WIN32)
             return ::GetCurrentProcessId();
             #else
-            return getpid(void);
+            return getpid();
             #endif
         };
 
@@ -219,7 +219,7 @@ void testfn(int argc, const char **argv) {
 
 
     cute::suite s3{};
-    for(size_t i = 0; i <= 50; i++) {
+    for(size_t i = 0; i <= 200; i++) {
         std::string ctx = "s3_"s + std::to_string(i);
         s3 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, ctx.c_str());
     }

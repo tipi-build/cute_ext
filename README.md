@@ -359,7 +359,7 @@ auto get_pid = []() -> size_t {
 
   #else
 
-  return getpid(void);
+  return getpid();
 
   #endif
 };
