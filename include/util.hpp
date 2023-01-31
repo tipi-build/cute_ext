@@ -16,7 +16,7 @@
 
 #else
 // access POSIX environment
-extern char **environ;
+extern "C" char **environ;
 #endif
 
 
