@@ -16,7 +16,7 @@ public:
 
   void Test3_throws()
   {
-    int f = std::stoi("ABBA");  // Throws: no conversion
+    int f = std::stoi("ABBA");  // Throws: no conversion    
   }
 };
 

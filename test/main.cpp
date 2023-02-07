@@ -17,6 +17,20 @@
 
 #include <termcolor/termcolor.hpp>
 
+#include <filesystem>
+
+#if defined(_WIN32)
+
+#include <windows.h>
+#include <processthreadsapi.h>
+
+#else
+
+#include <sys/types.h>
+#include <unistd.h>
+
+#endif
+
 using namespace std::chrono_literals;
 
 extern cute::suite make_suite();
@@ -31,30 +45,37 @@ public:
         ASSERT_EQUAL(42, lifeTheUniverseAndEverything);
     }
 
+    void mySimpleTestLong(){        
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        ASSERT_EQUAL(42, lifeTheUniverseAndEverything);
+    }
+
     void failingtest(){
         ASSERT_EQUAL(42, 1);
     }
 
     
     void throwingtest(){
-        std::cout << "Hallo EH TDG" << std::endl;  
+        std::cout << "Hallo EH TDG ]]> blub " << std::endl;  
         throw std::runtime_error("Blah!");
     }
 
     int anotherTest(){
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
         ASSERT_EQUAL(42, 42);
         return 0;
     }
 
 };
 
-cute::suite make_suite_ReadOnlyIniFileTest()
+tipi::cute_ext::ext_suite make_suite_ReadOnlyIniFileTest()
 {
-    cute::suite s {};
+    tipi::cute_ext::ext_suite s{};
+    s.run_setting = tipi::cute_ext::ext_run_setting::before_all;
     s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "temp_0"));
     s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "temp_1"));
     s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "temp_2"));
+    s.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTestLong, "temp_LONG2"));
     return s;
 }
 
@@ -90,10 +111,10 @@ size_t ynull_listener::cnt = 0;
 
 using namespace std::string_literals;
 
-int main(int argc, const char **argv) {
+void testfn(int argc, const char **argv) {
     tipi::cute_ext::util::enable_vt100_support_windows10();    
 
-    cute::xml_file_opener xmlfile(argc, argv);
+    //cute::xml_file_opener xmlfile(argc, argv);
     //tipi::cute_ext::modern_xml_listener < tipi::cute_ext::modern_listener<> > lis{xmlfile.out};    
     tipi::cute_ext::modern_listener lis{};
     //tipi::cute_ext::modern_xml_listener lis{};
@@ -103,6 +124,72 @@ int main(int argc, const char **argv) {
     //ynull_listener lis{};
 	
     auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
+
+
+    if(!runner.is_autoparallel_child()) {
+    
+        auto get_pid = []() -> size_t {
+            #if defined(_WIN32)
+            return ::GetCurrentProcessId();
+            #else
+            return getpid();
+            #endif
+        };
+
+        auto clean_path = [](std::string path) {
+            static std::string forbidden_path_chars( "!$%&()[]{}§*+#:?\"<>|" );
+            std::transform(
+                path.begin(), path.end(), path.begin(), 
+                [&](char c) { return forbidden_path_chars.find(c) != std::string::npos ? '_' : c; }
+            );
+
+            return path;
+        };
+
+        auto current_pid = get_pid();
+
+        std::stringstream pathbase_ss{};
+
+        #if defined(_WIN32)
+        pathbase_ss << "C:/temp/"; 
+        #else
+        pathbase_ss << "/tmp/"; 
+        #endif
+        
+        pathbase_ss << "cute_ext_cov_" << current_pid << "/";
+        std::string pathbase = pathbase_ss.str();
+        std::filesystem::create_directories(pathbase);
+
+        std::cout << "\n---\n" << "ℹ️ All coverage analysis files will be written to: " << pathbase << "\n---\n" << std::endl;
+
+        runner.set_on_before_autoparallel_child_process([&, pathbase](const auto& suite_name, const auto& unit_name, auto& args, auto& env) -> void {
+            // place all the .gcda files as: /tmp/cute_ext_cov_{current_pid}/{suite_name}-{unit_name}/<gcov-generate-filename.gcda>
+            std::stringstream path_ss{};
+            path_ss << pathbase << clean_path(suite_name) << "-" << clean_path(unit_name); 
+
+            std::string path = path_ss.str();
+            std::filesystem::create_directories(path);           
+
+            env.emplace("GCOV_PREFIX", path);  
+            env.emplace("GCOV_PREFIX_STRIP", "10000");  // clear all gcov generated folders
+        });
+
+    }
+    else {
+        std::cout << "ENV ℹ️ : ";
+        auto env_gcov_prefix = std::getenv("GCOV_PREFIX");
+        if(env_gcov_prefix) {
+            std::cout << "GCOV_PREFIX=" << env_gcov_prefix << " ";
+        }
+
+        auto env_gcov_prefix_strip = std::getenv("GCOV_PREFIX_STRIP");
+
+        if(env_gcov_prefix_strip) {
+            std::cout << "GCOV_PREFIX_STRIP=" << env_gcov_prefix_strip << " ";
+        }
+
+        std::cout << "(END)" << std::endl;
+    }
 
     cute::suite s1{};
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
@@ -132,18 +219,20 @@ int main(int argc, const char **argv) {
 
 
     cute::suite s3{};
-    for(size_t i = 0; i < 200; i++) {
+    for(size_t i = 0; i <= 200; i++) {
         std::string ctx = "s3_"s + std::to_string(i);
         s3 += TIPI_CUTE_SMEMFUN(OutTests, anotherTest, ctx.c_str());
     }
 
     s3 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s3_201");
     
-    runner(s1, "Suite 1");
-    runner(s2, "Suite 2");
+    runner(s2, "Linear Suite AFTER_ALL", tipi::cute_ext::ext_run_setting::after_all, true);
     runner(s3, "Suite 3");
+    runner(make_suite(), "LINEAR External suite ", tipi::cute_ext::ext_run_setting::normal, true);  
     runner(make_suite_ReadOnlyIniFileTest(), "Temp suite");
     runner(make_suite(), "External suite");  
+    
+    runner(s1, "Linear Suite BEFORE_ALL", tipi::cute_ext::ext_run_setting::before_all, true);
     
     /*try {
         wrapper.process_cmd();
@@ -152,8 +241,9 @@ int main(int argc, const char **argv) {
         std::cout << "Failed to run\n" << ex.what() << std::endl;
         return -1;
     }*/
+}
 
-    
-    
+int main(int argc, const char **argv) {
+    testfn(argc, argv);
     return 0;
 }

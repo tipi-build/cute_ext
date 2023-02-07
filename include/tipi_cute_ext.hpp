@@ -15,6 +15,7 @@
 #include <optional>
 #include <type_traits>
 #include <typeinfo>
+#include <set>
 
 #include <cute/cute.h>
 
@@ -38,8 +39,43 @@
 namespace tipi::cute_ext {
   using namespace std::string_literals;
 
+  enum ext_run_setting {
+    normal,
+    before_all,
+    after_all
+  };
+
+  class ext_suite : public cute::suite {
+  public:
+
+    ext_run_setting run_setting;
+    bool force_linear;
+
+    ext_suite(const ext_suite& other) 
+      : cute::suite(other)
+      , run_setting(other.run_setting)
+      , force_linear(other.force_linear)
+    { }
+
+    ext_suite(ext_suite&& other) noexcept 
+      : cute::suite(std::move(other))
+      , run_setting(other.run_setting)
+      , force_linear(other.force_linear)
+    { }
+    
+    ext_suite(ext_run_setting r = ext_run_setting::normal, bool force_linear = false) 
+      : run_setting(r)
+      , force_linear(force_linear)
+    { }
+
+    ext_suite(const cute::suite &suite, ext_run_setting r = ext_run_setting::normal, bool force_linear = false)
+      : cute::suite(suite)
+      , run_setting(r)
+      , force_linear(force_linear)
+    { }      
+  };
+
   namespace detail {
-    cute::null_listener dummy_null_listener{};
 
     enum run_unit_result {
       passed,
@@ -64,7 +100,7 @@ namespace tipi::cute_ext {
       else if(val == 2) return run_unit_result::errored;
       else if(val == 3) return run_unit_result::skipped;
       return run_unit_result::unknown;
-    }  
+    }
 
     template <typename app_listener_T = cute::null_listener>
     struct wrapper_options {
@@ -129,9 +165,11 @@ namespace tipi::cute_ext {
 
         if(listener_out == "cout" || listener_out == "console") {
           out_stream_ = &std::cout;
+          std::cout << termcolor::colorize;
         }
         else if(listener_out == "cerr" || listener_out == "error") {
           out_stream_ = &std::cerr;
+          std::cout << termcolor::colorize;
         }
         else {
           std::filesystem::path output_path{listener_out};
@@ -199,11 +237,25 @@ namespace tipi::cute_ext {
     std::optional<int> force_destructor_exit_code;
 
     /// @brief all test suites registered (could be just one depending on the run mode)
-    std::unordered_map<std::string, cute::suite> all_suites_{};
+    std::unordered_map<std::string, std::shared_ptr<ext_suite>> all_suites_{};
 
     std::atomic<size_t> test_exec_failures = 0;
     std::atomic<size_t> test_exec_errors = 0;
-   
+
+    
+    /// @brief callback used to customize autoparallel process start parameters and environment prior to launching child processes
+    /// @param const std::string& name of the suite
+    /// @param const std::string& name of the test unit
+    /// @param std::vector<std::string>& arguments for the process start
+    /// @param std::map<std::string, std::string>& environment variable map
+    std::function<
+      void(
+        const std::string&, 
+        const std::string&, 
+        std::vector<std::string>&, 
+        std::unordered_map<std::string, std::string>&
+      )> on_before_start_process_ = [](const auto& suitename, const auto& unitname, auto& args, auto& env) {};
+
     /// @brief Create a filtering lambda/fn given a (regex) string
     /// @param pattern 
     /// @return 
@@ -258,10 +310,10 @@ namespace tipi::cute_ext {
 
       auto& out = opt.get_output();
 
-      for(const auto &[i, s] : all_suites_) {
-        out << "Suite: '" << i << "'\n";
+      for(const auto &[suite_info, suite_ptr] : all_suites_) {
+        out << "Suite: '" << suite_info << "'\n";
 
-        for(const auto &test_case : s) {
+        for(const auto &test_case : *suite_ptr) {
           out << " + " << test_case.name() << "\n";
         }
 
@@ -275,12 +327,20 @@ namespace tipi::cute_ext {
     // wraps all the control logic for that
     struct autoparallel_testcase {
 
-      autoparallel_testcase(const std::string& base_cmd, const std::string &suite, const std::string &unit, const cute::test &cute_unit)
+      autoparallel_testcase(
+        const std::vector<std::string>& base_cmd, 
+        const std::unordered_map<std::string, std::string> &base_env, 
+        const std::string &suite, 
+        const std::string &unit, 
+        const cute::test &cute_unit,
+        std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> on_before_start_process)
         : suite_(suite)
         , unit_(unit)
         , process_base_cmd_(base_cmd)
+        , process_base_env_(base_env)
         , cute_unit_(cute_unit)
         , out_ss_ptr_{std::make_shared<std::stringstream>()}
+        , on_before_start_process_(on_before_start_process)
       {          
       }
 
@@ -303,8 +363,8 @@ namespace tipi::cute_ext {
         }
       }
 
-      auto get_suite_name() const { return suite_; }
-      auto get_unit_name() const { return unit_; }
+      auto& get_suite_name() const { return suite_; }
+      auto& get_unit_name() const { return unit_; }
       const cute::test& get_cute_unit() const { return cute_unit_; }
 
       bool is_running() const { return running_; }
@@ -336,13 +396,31 @@ namespace tipi::cute_ext {
     private:      
 
       void run_process(std::function<void(const autoparallel_testcase&)> cb) {
-        std::stringstream cmd_ss{};
+        
+        /* process args */
+        std::vector<std::string> cmd_args{};
+
         #if defined(_WIN32) && !defined(MSYS_PROCESS_USE_SH)
-        cmd_ss << "cmd /c ";
+        cmd_args.push_back("cmd /c");
         #endif
 
-        cmd_ss << process_base_cmd_ << " --parallel-suite=\"" << suite_ << "\" --parallel-unit=\"" << unit_ << "\"";
+        // add all of process_base_cmd_ to cmd_args
+        std::copy(process_base_cmd_.begin(), process_base_cmd_.end(), std::back_inserter(cmd_args));
 
+        // add the parallal-suite arg & value
+        cmd_args.push_back("--parallel-suite");
+        cmd_args.push_back(suite_);
+
+        cmd_args.push_back("--parallel-unit");
+        cmd_args.push_back(unit_);
+
+        /* process env */
+        std::unordered_map<std::string, std::string> cmd_env(process_base_env_);
+
+        // call customization cb
+        on_before_start_process_(suite_, unit_, cmd_args, cmd_env);
+
+        /* process output */
         auto loc_ss_ptr = out_ss_ptr_;
 
         try { 
@@ -352,10 +430,11 @@ namespace tipi::cute_ext {
           };
 
           process_ptr = std::make_shared<TinyProcessLib::Process>(
-            cmd_ss.str(), 
-            "",         /* env */
-            processio,  /*stdout */
-            processio,  /*stderr */
+            cmd_args,   /* cmd + arg */
+            "",         /* path */
+            cmd_env,    /* env */
+            processio,  /* stdout */
+            processio,  /* stderr */
             false       /* don't open stdin */
           );
 
@@ -386,7 +465,8 @@ namespace tipi::cute_ext {
       bool success_ = false;
       std::string suite_;
       std::string unit_;
-      std::string process_base_cmd_;
+      std::vector<std::string> process_base_cmd_;
+      std::unordered_map<std::string, std::string> process_base_env_;
       const cute::test &cute_unit_;
       
       std::shared_ptr<std::stringstream> out_ss_ptr_;
@@ -394,6 +474,8 @@ namespace tipi::cute_ext {
       std::optional<int> process_exit_code{};
 
       std::shared_ptr<std::thread> process_thread_ptr;
+
+      std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> on_before_start_process_;
     };
 
     bool cmd_autoparallel() {
@@ -404,45 +486,95 @@ namespace tipi::cute_ext {
       auto filter_unit_enabled = make_filter_fn(opt.filter_unit_value);
 
       // build the base command
-      std::string base_process_cmd{};
+      std::vector<std::string> base_process_cmd_args{};
 
       {
-        std::stringstream cmd_ss{};
-        cmd_ss << opt.program_exe_path;
+        base_process_cmd_args.push_back(opt.program_exe_path);
 
         if(opt.listener_arg.empty() == false) {
-        cmd_ss << " --listener=\"" << opt.listener_arg << "\"";
+          base_process_cmd_args.push_back("--listener");
+          base_process_cmd_args.push_back(opt.listener_arg);
         }
 
         if(opt.force_cli_listener) {
-          cmd_ss << " --force-listener ";
+          base_process_cmd_args.push_back("--force-listener");
         }
-
-        base_process_cmd = cmd_ss.str();
       }
+
+      // retrieve the full environment map of the current process
+      // this will be used as base for the per-child-process environment map
+      auto base_env = util::get_current_ENVIRONMENT();
 
       // collect all the tests
       std::vector<autoparallel_testcase> tasks{};
 
-      for(const auto &[info, suite] : all_suites_) {
+      for(const auto &[suite_name, suite] : all_suites_) {
         
         // respect --filter-suite
-        if(filter_suite_enabled(info) == false) {
+        if(filter_suite_enabled(suite_name) == false) {
           continue;
         }
         
-        for(const auto &test_case : suite) {
+        for(const auto &test_case : *suite) {
 
           // no need to spawn for disabled/skipped tests...
           if(filter_unit_enabled(test_case.name())) {
-            tasks.emplace_back(base_process_cmd, info, test_case.name(), test_case);
+            tasks.emplace_back(base_process_cmd_args, base_env, suite_name, test_case.name(), test_case, on_before_start_process_);
           }
         }
       }
 
       /** HEPLPERS for the actual processing below */
-      auto next_task_it = [&]() {
-        return std::find_if(tasks.begin(), tasks.end(), [](auto &t) { return t.was_started() == false; });
+      std::atomic<bool> linear_mode = false;
+      std::string linear_mode_suite_name{};
+      
+      auto next_task_it = [&]() {        
+        if(linear_mode) {
+          return std::find_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.was_started() == false && t.get_suite_name() == linear_mode_suite_name; });
+        }
+        else {
+          // first try to look for "before_all suites"
+          auto result = std::find_if(
+            tasks.begin(), 
+            tasks.end(), 
+            [&](auto &t) { 
+              auto suite_ptr = all_suites_.at(t.get_suite_name());
+              return t.was_started() == false && suite_ptr->run_setting == ext_run_setting::before_all; 
+            }
+          );
+
+          if(result != tasks.end()) {
+            return result;
+          }
+
+          result = std::find_if(
+            tasks.begin(), 
+            tasks.end(), 
+            [&](auto &t) { 
+              auto suite_ptr = all_suites_.at(t.get_suite_name());
+              return t.was_started() == false && suite_ptr->run_setting == ext_run_setting::normal; 
+            }
+          );
+
+          if(result != tasks.end()) {
+            return result;
+          }
+          
+          result = std::find_if(
+            tasks.begin(), 
+            tasks.end(), 
+            [&](auto &t) { 
+              auto suite_ptr = all_suites_.at(t.get_suite_name());
+              return t.was_started() == false && suite_ptr->run_setting == ext_run_setting::after_all; 
+            }
+          );
+
+          if(result != tasks.end()) {
+            return result;
+          }
+
+          return result;
+        }
       };
 
       auto tasks_remaining = [&]() {
@@ -467,24 +599,112 @@ namespace tipi::cute_ext {
         }
 
         if(inserted) {
-          const cute::suite& suite = all_suites_.at(suite_name);
-          listener.suite_begin(suite, suite_name.c_str(), suite.size());
+          auto suite_ptr = all_suites_.at(suite_name);
+          listener.suite_begin(*suite_ptr, suite_name.c_str(), suite_ptr->size());
         }        
       };
-      
+
       std::atomic<size_t> tests_failed = 0;
       std::atomic<size_t> tests_running = 0;
+      
+      // we do a two stage status tracking here so we can be
+      // sure we don't mix up the suite printing over linear <=> parallel
+      // processing transitions
+      std::mutex suites_printing_started_mutex;
+      std::set<std::string> suites_printing_started{}; 
+      std::set<std::string> suites_printed{};      
+
+      auto was_suite_printed = [&](const std::string suite_name) {
+        return std::find(suites_printed.begin(), suites_printed.end(), suite_name) != suites_printed.end();
+      };
+
+      auto all_suites_printed = [&]() {
+        return suites_printed.size() == all_suites_.size();
+      };
+
+      auto print_suite = [&](const auto& suite, const std::string& suite_name) {
+        auto print_now = false;
+        
+        // check if this is a *new insertion* in the printing started set...
+        {
+          std::lock_guard<std::mutex> gg{suites_printing_started_mutex};
+          auto insert_result = suites_printing_started.insert(suite_name);
+          print_now = insert_result.second; // true only if there was an insertion
+        }
+        
+        // this should only happend one
+        if(print_now) {
+          listener.suite_end(suite, suite_name.c_str());
+
+          // finally we update the status to "printed" so it's actually tracked as such
+          suites_printed.insert(suite_name);
+        }
+      };
+
+      auto linear_skip =[&]() {
+        return (linear_mode == true) && (tests_running > 0);
+      };
+
+      auto suite_finished = [&](const std::string& suite) {
+        size_t count_tests  = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite; });
+        size_t count_done   = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite && t.is_done(); });
+        return count_tests == count_done;
+      };
+
+
+      auto print_finished_suites = [&]() {
+        // collect the results until all tasks of a suite are finished
+        for(const auto &[suite_name, suite_ptr] : all_suites_) {
+
+          if(suite_finished(suite_name) && !was_suite_printed(suite_name)) {
+            print_suite(*suite_ptr, suite_name);
+          }
+
+          opt.get_output() << std::flush;  // makes sure ctest prints something while the test runs...
+        }
+      };
+      
+
 
       auto start_next = [&]() {
         auto nextit = next_task_it();
 
         if(nextit != tasks.end()) {
-          tests_running++;
 
-          auto suite_name = nextit->get_suite_name();
+          const std::string& suite_name = nextit->get_suite_name();
+          auto suite_ptr = all_suites_.at(suite_name);
+
+          // remember if this unit was started in linear mode
+          // because only those should be able to decide to exit
+          // the linear mode (avoid races to the bottom)
+          bool unit_force_linear_mode = suite_ptr->force_linear;
+
+          // we are not yet in linear mode... 
+          // 1. wait here until no more tasks are running
+          // 2. enter linear mode 
+          // 3. start processing again until all tasks in linear mode are done
+          if(unit_force_linear_mode) {
+            if(linear_mode == false) {
+              // wait for all running tasks to finish...
+              while(tests_running > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));  // TODO: 1 or 10ms
+              }
+
+              print_finished_suites();
+
+              linear_mode = true;
+              linear_mode_suite_name = suite_name;              
+
+              // go to immediate mode rendering
+              listener.set_render_options(true, true, true, true);
+            }
+          }
+
+          tests_running++;
           mark_suite_started(suite_name);
 
-          nextit->start([&](const auto &task) {
+          /**note: CLANG requires us to copy capture unit_force_linear_mode (probably because of a thread locality specific behavior) */
+          nextit->start([&, unit_force_linear_mode](const auto &task) {
 
             auto urr = task.get_run_unit_result();            
 
@@ -502,36 +722,45 @@ namespace tipi::cute_ext {
             }
 
             tests_running--;
+
+            // all linear mode test are done
+            // this is "thread safe" because we should never enter the case that
+            // we have multiple linear mode tests running at once
+            if(unit_force_linear_mode && linear_mode == true && tests_running == 0) {
+
+              // peek next test and see if it's still the same suite
+              auto next_peek = next_task_it();
+
+              // next_task_it() does only return tasks of the same suite
+              // in linear mode, so if we don't get any, we're done with the linear mode
+              if(next_peek == tasks.end()) {
+
+                // force printing of the suite end here so there's no race between 
+                // immediate mode & parallel printing
+                print_finished_suites();
+
+                // them we can leave immediate mode rendering
+                // (order is important, this has to be re-set before disabling linear_mode, 
+                // otherwise there will be rendering hickups)
+                listener.set_render_options(true, true, true, false);
+
+                // finally revert to parallel mode processing
+                linear_mode_suite_name = ""; // reset
+                linear_mode = false;
+              }              
+            }
           });                    
 
-          const cute::suite& suite = all_suites_.at(suite_name);
-          listener.test_start(nextit->get_cute_unit(), suite);
+          listener.test_start(nextit->get_cute_unit(), *suite_ptr);
+
+          if(linear_mode == true) {
+            opt.get_output() << std::flush;  // makes sure ctest prints something while the test runs...
+          }
           return true;
         }
 
         return false;
-      };
-
-      auto suite_finished = [&](const std::string& suite) {
-        size_t count_tests  = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite; });
-        size_t count_done   = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite && t.is_done(); });
-        return count_tests == count_done;
-      };
-
-      std::vector<std::string> suites_printed{};      
-
-      auto was_suite_printed = [&](const std::string suite_name) {
-        return std::find(suites_printed.begin(), suites_printed.end(), suite_name) != suites_printed.end();
-      };
-
-      auto all_suites_printed = [&]() {
-        return suites_printed.size() == all_suites_.size();
-      };
-
-      auto print_suite = [&](const auto& suite, const std::string& suite_name) {
-        suites_printed.push_back(suite_name);        
-        listener.suite_end(suite, suite_name.c_str());
-      };
+      };     
 
       /** The actual running thing */
       listener.set_render_options(true, true, true, false);
@@ -539,20 +768,24 @@ namespace tipi::cute_ext {
       
       size_t strand_limit = ( opt.parallel_strands_arg < 1024) ? opt.parallel_strands_arg : 1024;
 
-      while(tasks_remaining() && !all_suites_printed()) {
+      while(tasks_remaining() || !all_suites_printed()) {
+        
+        // after a max of N-thread iterations we'd like to 
+        // check if there's something to print just to keep things fluid
+        size_t loop_cnt = 0;
 
         // start as many tasks as we have "slots"
-        while(tasks_remaining() && tests_running < strand_limit) {
+        while((loop_cnt++ < strand_limit) && !linear_skip() && tasks_remaining() && (tests_running < strand_limit)) {
           start_next();
         }        
 
-        // collect the results until all tasks of a suite are finished
-        for(const auto &[suite_name, suite] : all_suites_) {
-          
-          if(suite_finished(suite_name) && !was_suite_printed(suite_name)) {
-            print_suite(suite, suite_name);
-          }
+        if(!linear_mode) {
+          // this could otherwise be called in parallel in another thread
+          // in the autoparallel_testcase completion callback          
+          print_finished_suites();
         }
+
+        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
       }
 
       if(force_destructor_exit_code.value_or(0) == 0) { 
@@ -563,11 +796,11 @@ namespace tipi::cute_ext {
       return tests_failed == 0;
     }
 
-    bool cmd_run_base() {
+    bool cmd_run_base(std::optional<std::string> suite_to_run = std::nullopt) {
       bool success = true;
 
       try {
-        success = run_suites(all_suites_);
+        success = run_suites(suite_to_run);
       }
       catch(const std::exception& ex) {
         opt.get_output() << "tipi cute_ext failed: " << ex.what() << "\n";
@@ -623,7 +856,7 @@ namespace tipi::cute_ext {
       }
     }
 
-    bool process_cmd() {      
+    bool process_cmd(std::optional<std::string> suite_to_run = std::nullopt) {      
 
       if(opt.show_help) {
         print_help();
@@ -640,7 +873,7 @@ namespace tipi::cute_ext {
       }
 
       if(opt.parallel_child_run) {
-        return cmd_run_base();
+        return cmd_run_base(suite_to_run);
       }
 
       // run the suite automatically if no additional params are provided OR and explicit --run is present
@@ -650,49 +883,95 @@ namespace tipi::cute_ext {
           return cmd_autoparallel();
         }      
 
-        return cmd_run_base();        
+        return cmd_run_base(suite_to_run);        
       }
 
       return true;
     }
+
+    /// @brief Callback used to customize the startup command of every child process 
+    /// launched in auto-parallel mode
+    /// @param cb void fn with parameters: [const std::string&] suite_name, [const std::string&] unit_name, [std::vector<std::string>&] cmd_args, [std::unordered_map<std::string, std::string>&] environment_variables
+    void set_on_before_autoparallel_child_process(std::function<void(const std::string&, const std::string&, std::vector<std::string>&, std::unordered_map<std::string, std::string>&)> cb) {
+      on_before_start_process_ = cb;
+    }
+
+    /// @brief Returns true if the passed args signify this runner is executing in autoparallel_child mode
+    /// @return 
+    bool is_autoparallel_child() {
+      return opt.parallel_child_run;
+    }
     
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
     /// @param suite cute::suite
-    /// @param info name
-    void register_suite(const cute::suite& suite, const std::string& name) {
+    /// @param info     
+    void register_suite(std::shared_ptr<ext_suite> suite_ptr, const std::string& name) {
+      all_suites_.insert({ name, suite_ptr });
+      
       if(opt.parallel_run || (opt.list_testcases && !opt.run_explicit)) {
-        all_suites_.insert({ name, suite });
+        // done
       }
       else {        
         // in single-TC mode (as parallel mode child process) we skip every suite that is not the
         // expected one
-        if(!opt.parallel_run || name == opt.auto_concurrent_suite) {
+        if(!opt.parallel_run || (opt.parallel_child_run && name == opt.auto_concurrent_suite)) {
 
-          all_suites_ = std::unordered_map<std::string, cute::suite>{
-            { name, suite }
-          };
+          /*all_suites_ = std::unordered_map<std::string, std::shared_ptr<ext_suite>>{
+            { name, suite_ptr }
+          };*/
 
-          process_cmd();
+          process_cmd(name);
         }
       }     
+    }
+
+    /// @brief  Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite the cute::suite to execute
+    /// @param name name of the suite
+    /// @param run_setting ext_run_setting::normal / ext_run_setting::before_all / ext_run_setting::after_all
+    /// @param force_linear set to true to force running this suite in linear mode
+    void register_suite(const cute::suite&& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
+      register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
     }
 
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
     /// @param suite cute::suite
     /// @param info name
-    void register_suite(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
+    void operator()(const cute::suite& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
+      register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
+    }
 
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
     /// @param suite cute::suite
     /// @param info name
-    void operator()(const cute::suite& suite, const std::string& name) { register_suite(suite, name); }
+    void operator()(const cute::suite&& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
+      register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
+    }    
 
     /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
-    /// @param suite cute::suite
+    /// @param suite ext_suite
     /// @param info name
-    void operator()(const cute::suite&& suite, const std::string& name) { register_suite(suite, name); }
+    void register_suite(const ext_suite&& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
+      register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
+    }
+
+    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite ext_suite
+    /// @param info name
+    void operator()(const ext_suite& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
+      register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
+    }
+
+    /// @brief Register a new suite and - depending on CLI arguments - run the suite immediately
+    /// @param suite ext_suite
+    /// @param info name
+    void operator()(const ext_suite&& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false) { 
+      register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
+    }  
+
+
   
-    bool run_suites(const std::unordered_map<std::string, cute::suite> &suites) {
+    bool run_suites(std::optional<std::string> suite_to_run = std::nullopt) {
 
       ext_listener& listener = opt.get_listener();
 
@@ -756,9 +1035,11 @@ namespace tipi::cute_ext {
 
       bool result = true;
 
-      for(const auto &[suite_name, suite] : suites) {
+      for(const auto &[suite_name, suite_ptr] : all_suites_) {
 
-        if(filter_suite_enabled(suite_name)) {
+        if((filter_suite_enabled(suite_name) && !suite_to_run.has_value()) || (suite_to_run.has_value() && suite_name == suite_to_run.value())) {
+
+          const auto &suite = *suite_ptr;
 
           listener.suite_begin(suite, suite_name.c_str(), suite.size());
 
@@ -785,11 +1066,11 @@ namespace tipi::cute_ext {
 
           if(!opt.parallel_child_run && opt.skipped_as_pass) {
             std::string skipped_suite_info = suite_name + " [SKIPPED]";
-            listener.suite_begin(suite, skipped_suite_info.c_str(), 0);
-            listener.suite_end(suite, skipped_suite_info.c_str());
+            listener.suite_begin(*suite_ptr, skipped_suite_info.c_str(), 0);
+            listener.suite_end(*suite_ptr, skipped_suite_info.c_str());
           }
         }        
-      }        
+      }
 
       return result;
     }

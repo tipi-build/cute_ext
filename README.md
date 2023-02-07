@@ -194,7 +194,6 @@ int main(int argc, const char *argv[])
    ...
 ```
 
-
 Work with the new API only
 --------------------------
 
@@ -222,6 +221,194 @@ int main(int argc, char *argv[]){
   // different behavior can be set using the runner's public API
   return 0;
 }
+```
+
+Controlling the test case execution in auto-parallel mode
+---------------------------------------------------------
+
+Executing the test suites in auto-parallel mode can uncover execution order dependencies and/or shared state issues, which can - in some cases - be due to the test design or system architecture.
+
+To enable using the automatic parallelization on parts of the test suite only whitout creating additional test executables one can add a options to force executing singular suites in linear mode, and or forcing a point in time of execution (`tipi::cute_ext::ext_run_setting::before_all`, `tipi::cute_ext::ext_run_setting::normal` or `tipi::cute_ext::ext_run_setting::after_all`).
+
+Forcing the execution to `force_linear` has the following behavior:
+
+- waiting for all tests running in parallel mode to finish
+- run the `force_linear`'ed suite one test case at a time, in the order their are added to the suite
+- switch back to auto-parallel mode after all tests are finished
+
+**NOTE:** The run settings only apply when running the test executable in `--parallel` mode.
+
+- `tipi::cute_ext::ext_run_setting::normal`: default / no change
+- `tipi::cute_ext::ext_run_setting::before_all`: the registered suite is executed before all `normal` ones. If multiple suites are registered as `before_all` the registration order in that subset is taken into account again.
+- `tipi::cute_ext::ext_run_setting::after_all`: the registered suite is executed after all `normal` ones. If multiple suites are registered as `after_all` the registration order in that subset is taken into account again.
+
+
+#### Order of execution example:
+
+The order of execution of the following sample in auto-parallel mode would be
+
+```
+                    // ext_run_setting  ; force_linear
+      S.3           // ::before_all     ; false
+       |  S.4       // ::before_all     ; false
+       \   /        //
+        S.4         // ::before_all     ; *true*
+       /   \        //
+      S.1  |        // ::normal         ; false
+       |  S.2       // ::normal         ; false
+       \   /        // 
+        S.6         // ::normal         ; *true*
+        /|\         //
+   /---+-+-+---\    //
+   |   |   |   |    //
+  S.7  |   |   |    //
+   |  S.8  |   |    // ::after_all      ; false
+   |   |  S.9  |    // ::after_all      ; false
+   |   |   |  S.10  // ::after_all      ; false
+   |   |   |   |    // 
+   \---+-+-+---/    //
+        \|/         // 
+        S.11        // ::after_all      ; *true*
+```
+
+```cpp
+// [snip] suites declaration
+using tipi::cute_ext;
+
+auto runner = cute_ext::makeRunner(lis, argc, argv);
+
+/// @brief  Register a new suite and - depending on CLI arguments - run the suite immediately
+/// @param suite the cute::suite to execute
+/// @param name name of the suite
+/// @param run_setting ext_run_setting::normal / ext_run_setting::before_all / ext_run_setting::after_all
+/// @param force_linear set to true to force running this suite in linear mode
+/// void register_suite(const cute::suite& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false)
+
+runner.register_suite(suite_1, "Suite 1");  /* implicit, run_setting = ext_run_setting::normal, force_linear = false */
+runner.register_suite(suite_2, "Suite 2");
+runner.register_suite(suite_3, "Suite 3",   ext_run_setting::before_all,  false);
+runner.register_suite(suite_4, "Suite 4",   ext_run_setting::before_all,  false);
+runner.register_suite(suite_5, "Suite 5",   ext_run_setting::before_all,  true);
+runner.register_suite(suite_6, "Suite 6",   ext_run_setting::normal,      true);
+runner.register_suite(suite_7, "Suite 7",   ext_run_setting::normal,      false);
+runner.register_suite(suite_8, "Suite 8",   ext_run_setting::after_all,   false);
+runner.register_suite(suite_8, "Suite 9",   ext_run_setting::after_all,   false);
+runner.register_suite(suite_8, "Suite 10",  ext_run_setting::after_all,   false);
+runner.register_suite(suite_9, "Suite 11",  ext_run_setting::after_all,   true);
+```
+
+Controlling auto-parallel child process parameters and environment
+------------------------------------------------------------------
+
+**cute_ext** launches one process per test unit in `--parallel` mode. In order to enable customizations to the start parameters and environment variables
+presented to each of these child processes you can register a callback that enables modifying startup parameters:
+
+```cpp
+runner.set_on_before_autoparallel_child_process([](const auto& suite_name, const auto& unit_name, auto& args, auto& env) -> void {
+  /**
+   * suite_name and unit_name are the std::string values used during the registration of the suites/units
+   */
+
+  /**
+   * args is the pre-populated command + arguments vector that is used to start the child process
+   * 
+   * /!\ each parameter should be inserted into its own entry
+   */
+
+  /**
+   * env in an std::unsorted_map<std::string, std::string> that contains a copy of the environment that 
+   * was presented to the currently running executable
+   */
+
+  /**
+   * EXAMPLES:
+   */
+  
+  // add CUSTOM_VARIABLE=42 to env
+  env.emplace("CUSTOM_VARIABLE", "42");
+  
+  // add --custom-option VALUE to command line arguments
+  args.push_back("--custom-option");
+  args.push_back("VALUE");
+});
+```
+
+As a concrete example, to enable generating a per-process `gcov` report:
+
+```cpp
+
+#include <filesystem>
+
+#if defined(_WIN32)
+
+#include <windows.h>
+#include <processthreadsapi.h>
+
+#else
+
+#include <sys/types.h>
+#include <unistd.h>
+
+#endif
+
+
+auto get_pid = []() -> size_t {
+  #if defined(_WIN32)
+
+  return ::GetCurrentProcessId();
+
+  #else
+
+  return getpid();
+
+  #endif
+};
+
+auto clean_path = [](std::string path) {
+  static std::string forbidden_path_chars( "!$%&()[]{}§*+#:?\"<>|" );
+  std::transform(
+    path.begin(), path.end(), path.begin(), 
+    [&](char c) { return forbidden_path_chars.find(c) != std::string::npos ? '_' : c; }
+  );
+
+  return path;
+};
+
+auto current_pid = get_pid();
+
+std::stringstream pathbase_ss{};
+
+#if defined(_WIN32)
+pathbase_ss << "C:/temp/"; 
+#else
+pathbase_ss << "/tmp/"; 
+#endif
+
+pathbase_ss << "cute_ext_cov_" << current_pid << "/";
+std::string pathbase = pathbase_ss.str();
+std::filesystem::create_directories(pathbase);
+
+std::cout << "\n---\n" << "ℹ️ All coverage analysis files will be written to: " << pathbase << "\n---\n" << std::endl;
+
+runner.set_on_before_autoparallel_child_process([&, pathbase](const auto& suite_name, const auto& unit_name, auto& args, auto& env) -> void {
+    // place all the .gcda files as: /tmp/cute_ext_cov_{current_pid}/{suite_name}-{unit_name}/<gcov-generate-filename.gcda>
+    std::stringstream path_ss{};
+    path_ss << pathbase << clean_path(suite_name) << "-" << clean_path(unit_name); 
+
+    std::string path = path_ss.str();
+    std::filesystem::create_directories(path);           
+
+    env.emplace("GCOV_PREFIX", path);  
+    env.emplace("GCOV_PREFIX_STRIP", "10000");  // clear all gcov generated folders
+});
+
+```
+
+Other helpers
+-------------
+
+```cpp
+if(!runner.is_autoparallel_child()) { /* .... */ }
 ```
 
 Licence

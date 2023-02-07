@@ -23,11 +23,11 @@ namespace tipi::cute_ext
   protected:
     const std::string SEPARATOR_THICK = "===============================================================================\n";
     const std::string SEPARATOR_THIN  = "-------------------------------------------------------------------------------\n";
-  
 
   public:
     modern_listener(std::ostream &os = std::cerr) 
-      : parallel_listener(os) {  
+      : parallel_listener(os) 
+    {
     }
     
     ~modern_listener() {
@@ -43,16 +43,19 @@ namespace tipi::cute_ext
         std::string datetimenowstr{std::ctime(&now_tm)};
         datetimenowstr.pop_back();  // f*ck that last \n
 
+        const auto lock = this->acquirex(this->out);
         this->out << util::symbols::run_icon << "Awesome testing with " << termcolor::cyan << termcolor::bold << "tipi.build" << termcolor::reset << " + " << termcolor::yellow << "CUTE" << termcolor::reset << "\n"
             << " -> Starting test at: " << datetimenowstr << " - [" <<  now.time_since_epoch().count() << "]\n"
             << SEPARATOR_THIN
-            << "\n";
+            << std::endl;
 
       }
     }
 
     void virtual parallel_render_end() override {
       using namespace std::chrono_literals;
+
+      const auto lock = this->acquirex(this->out);
 
       if(this->render_listener_info) {
         double total_time_ms = 0;
@@ -65,6 +68,7 @@ namespace tipi::cute_ext
         auto count_suites_pass = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success(); });
         auto count_suites_fail = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success() == false; });  
 
+
         this->out 
           << "\n"
           << "Test stats: \n"
@@ -72,8 +76,7 @@ namespace tipi::cute_ext
           << " - suites passed:       " << count_suites_pass << "\n";
 
         if(count_suites_fail > 0) { this->out << termcolor::red; }
-        this->out << " - suites failed:       " << count_suites_fail << "\n";
-        if(count_suites_fail > 0) { this->out << termcolor::reset; }
+        this->out << " - suites failed:       " << count_suites_fail << termcolor::reset << "\n";
 
         this->out 
           << " - test cases executed: " << this->tests.size() << "\n"
@@ -100,27 +103,29 @@ namespace tipi::cute_ext
     }
 
     virtual void parallel_render_test_case_start(const std::shared_ptr<test_run> &unit) override {
-      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
-
       if(this->render_immediate_mode) {
-        parallel_render_test_case_header(tco, unit);
+        const auto lock = this->acquirex(this->out);
+        parallel_render_test_case_header(this->out, unit);
       }
     }
 
-    std::string print_line_prefix(std::istream& input, std::string line_prefix) {
+    std::string print_line_prefix_colorize_red(std::istream& input, std::string line_prefix) {
 
       std::stringstream output{};
 
+      if(termcolor::_internal::is_colorized(this->out)) {
+        output << termcolor::colorize;
+      }      
+
       std::string line;
       while (std::getline(input, line)) {
-        output << line_prefix << line << "\n";
+        output << line_prefix << termcolor::red << line << termcolor::reset << "\n";
       }
 
       return output.str();
     }
 
     virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
-
       if(unit->outcome == test_run_outcome::Pass) {
         tco << termcolor::green << util::symbols::test_pass << util::padRight(" PASS", 11, ' ') << termcolor::reset;
       }
@@ -135,46 +140,54 @@ namespace tipi::cute_ext
       }
 
       if(unit->get_test_duration().count() < 1) {
-         tco << "    (" << unit->get_test_duration().count() * 1000 << "ms)";
+        tco << "    (" << unit->get_test_duration().count() * 1000 << "ms)";
       }
       else {
         tco << "    (" << unit->get_test_duration().count() << "s)";
       }
+
+      tco << "\n";
      
       if(unit->outcome == test_run_outcome::Fail) {
-        tco << "\n"
-            << termcolor::red  
-            << print_line_prefix(unit->info, " :> ")
-            << "\n"
-            << termcolor::reset;
+        tco << print_line_prefix_colorize_red(unit->info, " :> ")
+            << termcolor::reset
+            << "\n";
       }
       else if(unit->outcome == test_run_outcome::Error) {
-        tco << "\n"
-            << termcolor::red 
-            << print_line_prefix(unit->info, " :> ")
-            << "\n"
-            << termcolor::reset;
+        tco << print_line_prefix_colorize_red(unit->info, " :> ")
+            << termcolor::reset
+            << "\n";
       }
-      else {
-        tco << "\n";
-      }
-    
     }
 
     virtual void parallel_render_test_case_end(const std::shared_ptr<test_run> &unit) override {
 
-      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
+      if(this->render_immediate_mode) {
+        const auto lock = this->acquirex(this->out);
+        auto &tco = this->out;
 
-      if(this->render_test_info) {
-        if(!this->render_immediate_mode) {
-          parallel_render_test_case_header(tco, unit);
+        if(this->render_test_info) {
+          parallel_render_test_case_result(tco, unit);
+        }
+        else {
+          tco << unit->info.str();
         }
 
-        parallel_render_test_case_result(tco, unit);        
+        tco << std::flush;
       }
       else {
-        tco << unit->info.str();
-      } 
+        const auto lock = this->acquirex(unit->out);
+        auto &tco = unit->out;
+
+        if(this->render_test_info) {
+          parallel_render_test_case_header(tco, unit);          
+          parallel_render_test_case_result(tco, unit);
+        }
+        else {
+          //const auto lock_unit = this->acquirex();
+          tco << unit->info.str();
+        }
+      }     
     }
 
     virtual void parallel_render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
@@ -204,7 +217,7 @@ namespace tipi::cute_ext
 
         sot << "  | ";
         if(suite_ptr->count_success == suite_ptr->count_expected) { sot << termcolor::green; }
-        sot << "Pass      " << suite_ptr->count_success << "\n";
+        sot << "Pass      " << suite_ptr->count_success << termcolor::reset << "\n";
         if(suite_ptr->count_success == suite_ptr->count_expected) { sot << termcolor::reset; } 
 
         if(suite_ptr->count_failures > 0) { 

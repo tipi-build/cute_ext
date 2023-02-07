@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <cute/cute_listener.h>
+#include <stdlib.h>
 
 #if defined(_WIN32)
 #include <winsock.h>
@@ -12,10 +13,16 @@
 // and vt100 support enable api on windows
 #include <windows.h>
 #include <VersionHelpers.h>
+
+#else
+// access POSIX environment
+extern "C" char **environ;
 #endif
+
 
 namespace tipi::cute_ext::util
 {
+  using namespace std::string_literals;
 
   namespace symbols {
     #ifdef CUTEEXT_SAFE_SYMBOLS
@@ -181,4 +188,121 @@ namespace tipi::cute_ext::util
       return *this;
     }
   };
+
+  /// @brief Get the ENV variable map of THIS process
+  /// @return 
+  inline std::unordered_map<std::string, std::string> get_current_ENVIRONMENT() {
+    std::unordered_map<std::string, std::string> result{};
+    
+    #if defined(_WIN32)
+
+    auto free = [](char* p) { FreeEnvironmentStrings(p); };
+    auto env_block = std::unique_ptr<char, decltype(free)>{ GetEnvironmentStrings(), free};
+    char* env = env_block.get();
+
+    if (env != 0)
+    {
+      // GetEnvironmentStrings returns a block of \0 terminated string, with each string
+      // being formated like:
+      // VARIABLE=value\0
+      // 
+      // the last entry is terminated by two \0 (one for the variable, one for the entire block)
+      //
+      // this means that to parse through this we need to look out for two separators
+      //
+      // '=' separating the variable name from the value
+      // '\0' terminating each entry
+      //
+      // We need to keep track of these special things however (which we should skip btw...)
+      // 
+      // =C:=C:\.tipi\v7.w\40999a5-cute_ext.b\63dea0c\bin\test
+      // =D:=D:/
+      //
+      // these are "special" environment variables that cmd uses to keep track of a bunch of "special things"
+      // like per disk CWDs or expected exit codes and that are basically MSDOS compat remainders:
+      // interesting read: https://devblogs.microsoft.com/oldnewthing/20100506-00/?p=14133
+
+      int entry_start = 0;          // position of the start of variable name
+      int entry_separator = 0;      // position of the '=' separator 
+      bool search_value = false;    // toggle between looking up a VAR or VALUE
+      bool entry_line_start = true;
+      bool entry_is_msdos_special = false;
+
+      for(size_t ix = 0; ; ix++) {    
+
+        /** handle the "MSDOS special" entries that have entries starting with = */
+
+        if(entry_line_start) {
+          if(env[ix] == '=') {
+            entry_is_msdos_special = true;
+          }
+
+          entry_line_start = false;
+        }
+
+        if(entry_is_msdos_special) {
+          if(env[ix] == '\0') {
+            entry_line_start = true;
+            entry_is_msdos_special = false;
+            entry_start = ix;
+
+            // the unlikely case that we have only special entries...
+            //
+            // break on double \0 -- this is safe only because windows
+            // guarantees us that there *will be* two \0 at the end of the 
+            // env var block
+            if (env[ix + 1] == '\0') {
+              break;
+            }
+          }
+        }
+        else {
+
+          /** The "normal entries... "*/
+          if(!search_value && env[ix] == '=') {
+            search_value = true;
+            entry_separator = ix;
+          }
+          else if(env[ix] == '\0') {
+
+            std::string env_key(env + entry_start + 1, entry_separator - entry_start - 1);
+            std::string env_val(env + entry_separator + 1, ix - entry_separator - 1);
+
+            result.emplace(env_key, env_val); 
+            
+            // remember for the next round
+            search_value = false;
+            entry_start = ix;
+
+            // break on double \0 -- this is safe only because windows
+            // guarantees us that there *will be* two \0 at the end of the 
+            // env var block
+            if (env[ix + 1] == '\0') {
+              break;
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      size_t err = GetLastError();
+      throw std::runtime_error("Getting environment variables failed with return code: "s + std::to_string(err));
+    }
+
+    #else
+    char ** env;    
+    env = environ;
+    
+    for (; *env; ++env) {
+      std::string env_raw = std::string(*env);
+      auto pos_eq = env_raw.find('=');
+      result.emplace(env_raw.substr(0, pos_eq), env_raw.substr(pos_eq + 1, env_raw.size()));
+    }
+            
+    #endif
+
+    return result;
+  }
+
 }
