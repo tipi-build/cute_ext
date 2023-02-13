@@ -396,12 +396,13 @@ namespace tipi::cute_ext {
     private:      
 
       void run_process(std::function<void(const autoparallel_testcase&)> cb) {
-        
+
         /* process args */
         std::vector<std::string> cmd_args{};
 
         #if defined(_WIN32) && !defined(MSYS_PROCESS_USE_SH)
-        cmd_args.push_back("cmd /c");
+        cmd_args.push_back("cmd");
+        cmd_args.push_back("/c");
         #endif
 
         // add all of process_base_cmd_ to cmd_args
@@ -727,7 +728,7 @@ namespace tipi::cute_ext {
             // this is "thread safe" because we should never enter the case that
             // we have multiple linear mode tests running at once
             if(unit_force_linear_mode && linear_mode == true && tests_running == 0) {
-
+              
               // peek next test and see if it's still the same suite
               auto next_peek = next_task_it();
 
@@ -767,12 +768,13 @@ namespace tipi::cute_ext {
       listener.render_preamble();
       
       size_t strand_limit = ( opt.parallel_strands_arg < 1024) ? opt.parallel_strands_arg : 1024;
+      size_t loop_cnt = 0;
 
       while(tasks_remaining() || !all_suites_printed()) {
         
         // after a max of N-thread iterations we'd like to 
         // check if there's something to print just to keep things fluid
-        size_t loop_cnt = 0;
+        loop_cnt = 0;
 
         // start as many tasks as we have "slots"
         while((loop_cnt++ < strand_limit) && !linear_skip() && tasks_remaining() && (tests_running < strand_limit)) {
@@ -781,11 +783,11 @@ namespace tipi::cute_ext {
 
         if(!linear_mode) {
           // this could otherwise be called in parallel in another thread
-          // in the autoparallel_testcase completion callback          
+          // in the autoparallel_testcase completion callback   
           print_finished_suites();
         }
 
-        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
 
       if(force_destructor_exit_code.value_or(0) == 0) { 
@@ -915,11 +917,6 @@ namespace tipi::cute_ext {
         // in single-TC mode (as parallel mode child process) we skip every suite that is not the
         // expected one
         if(!opt.parallel_run || (opt.parallel_child_run && name == opt.auto_concurrent_suite)) {
-
-          /*all_suites_ = std::unordered_map<std::string, std::shared_ptr<ext_suite>>{
-            { name, suite_ptr }
-          };*/
-
           process_cmd(name);
         }
       }     
@@ -1037,7 +1034,7 @@ namespace tipi::cute_ext {
 
       for(const auto &[suite_name, suite_ptr] : all_suites_) {
 
-        if((filter_suite_enabled(suite_name) && !suite_to_run.has_value()) || (suite_to_run.has_value() && suite_name == suite_to_run.value())) {
+        if(filter_suite_enabled(suite_name) && (suite_to_run.has_value() && suite_name == suite_to_run.value())) {
 
           const auto &suite = *suite_ptr;
 

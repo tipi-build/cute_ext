@@ -252,7 +252,7 @@ The order of execution of the following sample in auto-parallel mode would be
       S.3           // ::before_all     ; false
        |  S.4       // ::before_all     ; false
        \   /        //
-        S.4         // ::before_all     ; *true*
+        S.5         // ::before_all     ; *true*
        /   \        //
       S.1  |        // ::normal         ; false
        |  S.2       // ::normal         ; false
