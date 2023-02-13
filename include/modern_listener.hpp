@@ -24,6 +24,8 @@ namespace tipi::cute_ext
     const std::string SEPARATOR_THICK = "===============================================================================\n";
     const std::string SEPARATOR_THIN  = "-------------------------------------------------------------------------------\n";
 
+    size_t test_case_name_padding = 40;
+
   public:
     modern_listener(std::ostream &os = std::cerr) 
       : parallel_listener(os) 
@@ -98,7 +100,13 @@ namespace tipi::cute_ext
 
     virtual void parallel_render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
       if(this->render_test_info) {
-        tco << " " << util::symbols::test_icon << " " << util::padRight(unit->name, 40, ' ') << std::flush;
+        tco << " " << util::symbols::test_icon << " " << util::padRight(unit->name, test_case_name_padding, ' ');
+
+        if(unit->name.size() > test_case_name_padding) {
+          tco << "\n    " << util::padRight("", test_case_name_padding, ' ');
+        }
+
+        tco << std::flush;
       }        
     }
 
