@@ -146,7 +146,7 @@ namespace cute {
 		}
 	};
 	template <typename Listener>
-	runner<Listener> makeRunner(Listener &s, int argc = 0, const char *const *argv = 0){
+	runner<Listener> makeRunnerBase(Listener &s, int argc = 0, const char *const *argv = 0){
 		return runner<Listener>(s,argc,argv);
 	}
 }
