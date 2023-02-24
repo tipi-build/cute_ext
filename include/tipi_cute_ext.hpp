@@ -85,7 +85,7 @@ namespace tipi::cute_ext {
       unknown
     };
 
-    int run_unit_result_to_ret(const run_unit_result val) {
+    inline int run_unit_result_to_ret(const run_unit_result val) {
       if(val == run_unit_result::passed) return 0;
       else if(val == run_unit_result::failed) return 1;
       else if(val == run_unit_result::errored) return 2;
@@ -94,7 +94,7 @@ namespace tipi::cute_ext {
       return 8;
     }
 
-    static run_unit_result ret_to_run_unit_result(const int val) {
+    inline run_unit_result ret_to_run_unit_result(const int val) {
       if(val == 0) return run_unit_result::passed;
       else if(val == 1) return run_unit_result::failed;
       else if(val == 2) return run_unit_result::errored;

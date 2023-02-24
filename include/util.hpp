@@ -55,7 +55,7 @@ namespace tipi::cute_ext::util
   }
 
 
-  std::vector<std::string> split(const std::string &s, char delim)
+  inline std::vector<std::string> split(const std::string &s, char delim)
   {
     std::vector<std::string> result;
     std::stringstream ss(s);
@@ -69,7 +69,7 @@ namespace tipi::cute_ext::util
     return result;
   }
 
-  std::string padRight(std::string str, const size_t num, const char paddingChar = ' ') 
+  inline std::string padRight(std::string str, const size_t num, const char paddingChar = ' ') 
   {
       if(num > str.size()) { str.append(num - str.size(), paddingChar); }
       return str;

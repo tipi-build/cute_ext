@@ -50,11 +50,11 @@ namespace tipi::cute_ext
       info << termcolor::colorize;
     }
 
-    void done(test_run_outcome outcome, const std::string &info);
+    inline void done(test_run_outcome outcome, const std::string &info);
 
     /// @brief Return the test run duration. If the test has not ended yet returns the difference to now()
     /// @return 
-    std::chrono::duration<double> get_test_duration() {
+    inline std::chrono::duration<double> get_test_duration() {
       return std::chrono::duration_cast<std::chrono::duration<double>>(end.value_or(std::chrono::steady_clock::now()) - start);
     }
 
