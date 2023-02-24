@@ -181,7 +181,7 @@ How-to migrate from the original cute
 
 
 ```cpp
-#include <cute/cute.h>
+#include <original/CUTE/cute/cute.h>
 #include <tipi_cute_ext.hpp>
 
 int main(int argc, const char *argv[])
@@ -198,7 +198,7 @@ Work with the new API only
 --------------------------
 
 ```cpp
-#include <cute/cute.h>
+#include <original/CUTE/cute/cute.h>
 #include <tipi_cute_ext.hpp>
 
 /* [snip - test functions - see /test/main.cpp for full example]*/

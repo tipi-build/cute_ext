@@ -5,7 +5,6 @@
 #include <cute/cute_equals.h>
 #include <cute/cute_suite.h>
 
-#include <tipi_cute_ext.hpp>
 #include <util.hpp>
 
 #include <parallel_listener.hpp>

@@ -17,14 +17,14 @@
 #include <typeinfo>
 #include <set>
 
-#include <cute/cute.h>
+#include <original/CUTE/cute/cute.h>
 
-#include <cute/cute_listener.h>
-#include <cute/cute_counting_listener.h>
-#include <cute/ostream_listener.h>
-#include <cute/ide_listener.h>
-#include <cute/tap_listener.h>
-#include <cute/xml_listener.h>
+#include <original/CUTE/cute/cute_listener.h>
+#include <original/CUTE/cute/cute_counting_listener.h>
+#include <original/CUTE/cute/ostream_listener.h>
+#include <original/CUTE/cute/ide_listener.h>
+#include <original/CUTE/cute/tap_listener.h>
+#include <original/CUTE/cute/xml_listener.h>
 
 #include <flags.h>
 #include <process.hpp>

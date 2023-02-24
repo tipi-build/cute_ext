@@ -12,7 +12,7 @@
 #include <mutex>
 
 #include <termcolor/termcolor.hpp>
-#include <cute/cute.h>
+#include <original/CUTE/cute/cute.h>
 
 #include "ext_listener.hpp"
 

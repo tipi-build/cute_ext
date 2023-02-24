@@ -1,8 +1,4 @@
 {
-    "PeterSommerlad/CUTE": { 
-        "@": "v2.2.6", 
-        "x": [ "cute_example/", "cute_tests/" ]
-    },
     "sailormoon/flags": {
         "@": ":4fe826161e0dcb093278126ae08b0b2cbab0e2f7"
     },
