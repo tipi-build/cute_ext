@@ -17,14 +17,14 @@
 #include <typeinfo>
 #include <set>
 
-#include <cute/cute.h>
+#include <original/CUTE/cute/cute.h>
 
-#include <cute/cute_listener.h>
-#include <cute/cute_counting_listener.h>
-#include <cute/ostream_listener.h>
-#include <cute/ide_listener.h>
-#include <cute/tap_listener.h>
-#include <cute/xml_listener.h>
+#include <original/CUTE/cute/cute_listener.h>
+#include <original/CUTE/cute/cute_counting_listener.h>
+#include <original/CUTE/cute/ostream_listener.h>
+#include <original/CUTE/cute/ide_listener.h>
+#include <original/CUTE/cute/tap_listener.h>
+#include <original/CUTE/cute/xml_listener.h>
 
 #include <flags.h>
 #include <process.hpp>
@@ -85,7 +85,7 @@ namespace tipi::cute_ext {
       unknown
     };
 
-    int run_unit_result_to_ret(const run_unit_result val) {
+    inline int run_unit_result_to_ret(const run_unit_result val) {
       if(val == run_unit_result::passed) return 0;
       else if(val == run_unit_result::failed) return 1;
       else if(val == run_unit_result::errored) return 2;
@@ -94,7 +94,7 @@ namespace tipi::cute_ext {
       return 8;
     }
 
-    static run_unit_result ret_to_run_unit_result(const int val) {
+    inline run_unit_result ret_to_run_unit_result(const int val) {
       if(val == 0) return run_unit_result::passed;
       else if(val == 1) return run_unit_result::failed;
       else if(val == 2) return run_unit_result::errored;
@@ -1086,4 +1086,11 @@ namespace tipi::cute_ext {
     return wrapper(listener, argc, argv, exit_on_destruction);
   }
 
+}
+
+namespace cute {
+  template <typename RunnerListener = cute::null_listener>
+  inline tipi::cute_ext::wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true) {
+    return tipi::cute_ext::wrapper(listener, argc, argv, exit_on_destruction);
+  }
 }

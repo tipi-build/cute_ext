@@ -5,7 +5,6 @@
 #include <cute/cute_equals.h>
 #include <cute/cute_suite.h>
 
-#include <tipi_cute_ext.hpp>
 #include <util.hpp>
 
 #include <parallel_listener.hpp>
@@ -123,7 +122,7 @@ void testfn(int argc, const char **argv) {
 	//cute::ostream_listener<> lis{std::cout};    
     //ynull_listener lis{};
 	
-    auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
+    auto runner = cute::makeRunner(lis, argc, argv);
 
 
     if(!runner.is_autoparallel_child()) {
