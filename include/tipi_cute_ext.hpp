@@ -172,6 +172,22 @@ namespace tipi::cute_ext {
           std::cout << termcolor::colorize;
         }
         else {
+          auto nowTs = std::to_string(std::time(nullptr)); // std::string(std::asctime(std::localtime(&result)));
+
+          std::map<std::string, std::string> placeholders_replacements = {
+            { "{executable}", program_exe_path },
+            { "{timestamp}", nowTs }
+          };
+
+          for(const auto& [search, replace] : placeholders_replacements) {
+
+            size_t findIx = listener_out.find(search);
+
+            if(findIx >= 0) {
+              listener_out.replace(findIx, search.length(), replace);
+            }
+          }
+
           std::filesystem::path output_path{listener_out};
           std::filesystem::create_directories(std::filesystem::absolute(output_path).parent_path());
 
