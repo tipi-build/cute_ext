@@ -100,6 +100,7 @@ namespace tipi::cute_ext
           << INDENT << "-->\n";
 
         this->out << "</testsuites>\n";
+        this->out << std::flush;
       }
     }
 
@@ -229,6 +230,8 @@ namespace tipi::cute_ext
             << INDENT
             << "</testcase>\n";
       }
+
+      tco << std::flush;
     }
 
     virtual void parallel_render_test_case_end(const std::shared_ptr<test_run> &unit) override {
