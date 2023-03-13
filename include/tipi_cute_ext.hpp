@@ -985,7 +985,7 @@ namespace tipi::cute_ext {
       register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
     }  
 
-
+    std::atomic<bool> first_run = true;
   
     bool run_suites(std::optional<std::string> suite_to_run = std::nullopt) {
 
@@ -993,6 +993,11 @@ namespace tipi::cute_ext {
 
       auto filter_unit_enabled = make_filter_fn(opt.filter_unit_value);
       auto filter_suite_enabled = make_filter_fn(opt.filter_suite_value);
+
+      if(first_run) {
+        first_run = false;
+        listener.render_preamble();        
+      }
 
       // if we are in concurrent / parallel mode, disable all funny rendering
       listener.set_render_options(
