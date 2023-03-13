@@ -869,6 +869,7 @@ namespace tipi::cute_ext {
       // in linear mode we do this at the proper end
       if(!opt.parallel_run && !opt.parallel_child_run) {
         opt.get_listener().render_end();
+        opt.get_output() << std::flush;
       }
       
       if(force_destructor_exit_code.has_value()) {
