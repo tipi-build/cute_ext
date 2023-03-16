@@ -36,6 +36,10 @@
 #include "modern_xml_listener.hpp"
 #include "listener_wrapper.hpp"
 
+#ifndef TIPI_CUTE_EXT
+#define TIPI_CUTE_EXT
+#endif 
+
 namespace tipi::cute_ext {
   using namespace std::string_literals;
 
