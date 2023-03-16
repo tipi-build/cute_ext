@@ -13,6 +13,9 @@ Features
 * Listing test cases `--list-testcases` / `-ltc`
 * Select the output formatter with `--listener`; valid options are: `ide`, `classic`, `classicxml`, `modern` (default), `modernxml` 
 * Select output type with `--output`; valid options are: `console` / `cout` (default), `error` / `cerr` or `<file-path>` (truncates previously existing content!)
+    - Following placeholders are available for the `<file-path>` options:
+        - `{executable}` name of the test executable, ex: for a `test.exe` specifying `--output "result-{executable}.txt` would result in `result-test.exe.txt`
+        - `{timestamp}` unix timestamp in seconds
 * `--help` / `-h` / `-?`
 * 🚀 `--parallel` mode: brute-force accelerate the test execution by rearanging the test suites to fit the maximum hardware parallelity for the executing machine
     - `--parallel` (default) run all maniac suites by spwaning child processes as deemed necessary

@@ -172,6 +172,24 @@ namespace tipi::cute_ext {
           std::cout << termcolor::colorize;
         }
         else {
+          auto nowTs = std::to_string(std::time(nullptr));
+          auto execPath = std::filesystem::path(program_exe_path);
+
+
+          std::map<std::string, std::string> placeholders_replacements = {
+            { "{executable}", execPath.filename().generic_string() },
+            { "{timestamp}", nowTs }
+          };
+
+          for(const auto& [search, replace] : placeholders_replacements) {
+
+            size_t findIx = listener_out.find(search);
+
+            if(findIx != std::string::npos) {
+              listener_out.replace(findIx, search.length(), replace);
+            }
+          }
+
           std::filesystem::path output_path{listener_out};
           std::filesystem::create_directories(std::filesystem::absolute(output_path).parent_path());
 
@@ -851,6 +869,7 @@ namespace tipi::cute_ext {
       // in linear mode we do this at the proper end
       if(!opt.parallel_run && !opt.parallel_child_run) {
         opt.get_listener().render_end();
+        opt.get_output() << std::flush;
       }
       
       if(force_destructor_exit_code.has_value()) {
@@ -966,7 +985,7 @@ namespace tipi::cute_ext {
       register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
     }  
 
-
+    std::atomic<bool> first_run = true;
   
     bool run_suites(std::optional<std::string> suite_to_run = std::nullopt) {
 
@@ -974,6 +993,11 @@ namespace tipi::cute_ext {
 
       auto filter_unit_enabled = make_filter_fn(opt.filter_unit_value);
       auto filter_suite_enabled = make_filter_fn(opt.filter_suite_value);
+
+      if(first_run) {
+        first_run = false;
+        listener.render_preamble();        
+      }
 
       // if we are in concurrent / parallel mode, disable all funny rendering
       listener.set_render_options(
