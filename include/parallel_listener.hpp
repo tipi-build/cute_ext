@@ -286,6 +286,12 @@ namespace tipi::cute_ext
 
     void test_success(cute::test const &test, char const *msg) override
     {
+      std::cout<<"name of test search "<<test.name()<<std::endl;
+      std::cout<<"map "<<std::endl;
+      for (auto t : tests){
+        std::cout<<t.first->name()<<std::endl;
+      }
+
 
       try{
         auto test_run_ptr = tests.at(&test);
