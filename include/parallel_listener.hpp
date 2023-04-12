@@ -296,9 +296,14 @@ namespace tipi::cute_ext
       }catch(const std::out_of_range& e){
         std::cerr << e.what() << '\n';
         std::cout<<"name of test search "<<test.name()<<std::endl;
+        std::cout<<"name of test search "<<&test<<std::endl;
+
         std::cout<<"map "<<std::endl;
+        std::cout<<msg<<std::endl;
         for (auto t : tests){
           std::cout<<t.first->name()<<std::endl;
+          std::cout<<&t<<std::endl;
+
         }
         throw std::runtime_error("test_success  function before at");
       }
