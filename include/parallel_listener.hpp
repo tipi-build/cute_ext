@@ -287,8 +287,6 @@ namespace tipi::cute_ext
     void test_success(cute::test const &test, char const *msg) override
     {
 
-
-
       try{
         auto test_run_ptr = tests.at(&test);
         test_run_ptr->done(test_run_outcome::Pass, msg);
@@ -296,21 +294,19 @@ namespace tipi::cute_ext
       }catch(const std::out_of_range& e){
         std::cerr << e.what() << '\n';
         std::cout<<"name of test search "<<test.name()<<std::endl;
-        std::cout<<"name of test search "<<&test<<std::endl;
-
-        std::cout<<"map "<<std::endl;
-        std::cout<<msg<<std::endl;
+        std::cout<<"name of test search adresse "<<&test<<std::endl;
+        std::cout<<"message "<<msg<<std::endl;
 
        
         
         for (auto &t : tests){
-          std::cout<<t.first->name()<<std::endl;
-          std::cout<<&t<<std::endl;
+          std::cout<<"a test of the map"<<t.first->name()<<std::endl;
+          std::cout<<"a test adress of the map"<<&t<<std::endl;
 
         }
 
          if(tests.find(&test)!=tests.end()){
-          std::cout<<"trouver trouver";
+          std::cout<<"trouver trouver"<<std::endl;
 
          }
         throw std::runtime_error("test_success  function before at");
