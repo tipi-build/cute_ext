@@ -224,6 +224,7 @@ namespace tipi::cute_ext
     void suite_end(cute::suite const &suite, char const *info) override
     {
       if(suites.find(&suite) != suites.end()) {
+        std::cout<<"suite_end  function before at"<<std::endl;
         auto suite_ptr = suites.at(&suite);
         suite_ptr->done(info);      
 
@@ -250,6 +251,8 @@ namespace tipi::cute_ext
 
     void test_start(cute::test const &test, const cute::suite& suite) override
     {
+              std::cout<<"test_start  function before at"<<std::endl;
+
       auto suite_ptr = suites.at(&suite);
       const std::lock_guard<std::mutex> lock(tests_i_mutex);  
       auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);  
@@ -270,6 +273,8 @@ namespace tipi::cute_ext
 
     void test_success(cute::test const &test, char const *msg) override
     {
+                    std::cout<<"test_success  function before at"<<std::endl;
+
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Pass, msg);
 
@@ -285,6 +290,7 @@ namespace tipi::cute_ext
       }
 
       ss << e.reason;
+        std::cout<<"test_failure  function before at"<<std::endl;
 
       auto test_run_ptr = tests.at(&test);
       test_run_ptr->done(test_run_outcome::Fail, ss.str());
