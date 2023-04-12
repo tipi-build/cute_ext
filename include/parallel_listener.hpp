@@ -224,61 +224,79 @@ namespace tipi::cute_ext
     void suite_end(cute::suite const &suite, char const *info) override
     {
       if(suites.find(&suite) != suites.end()) {
-        std::cout<<"suite_end  function before at"<<std::endl;
-        auto suite_ptr = suites.at(&suite);
-        suite_ptr->done(info);      
+        try{
+          auto suite_ptr = suites.at(&suite);
+          suite_ptr->done(info);      
 
-        auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
-        const auto lock = this->acquirex(sot);
+          auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
+          const auto lock = this->acquirex(sot);
 
-        if(!render_immediate_mode) {
-          parallel_render_suite_header(sot, suite_ptr);
+          if(!render_immediate_mode) {
+            parallel_render_suite_header(sot, suite_ptr);
 
-          for(const auto &t : suite_ptr->tests) {
-            const auto testout_guard = this->acquirex(t->out);   // makes shure it was completely written
-            sot << t->out.str();
+            for(const auto &t : suite_ptr->tests) {
+              const auto testout_guard = this->acquirex(t->out);   // makes shure it was completely written
+              sot << t->out.str();
+            }
           }
+
+          parallel_render_suite_footer(sot, suite_ptr);
+
+          if(!render_immediate_mode) {
+            const auto lock = this->acquirex(out);
+            out << suite_ptr->out.str();
+          }
+
+        }
+        catch(const std::exception& e){
+          std::cerr << e.what() << '\n';
+          throw std::runtime_error("suite_end  function before at");
         }
 
-        parallel_render_suite_footer(sot, suite_ptr);
-
-        if(!render_immediate_mode) {
-          const auto lock = this->acquirex(out);
-          out << suite_ptr->out.str();
-        }
       }
     }
 
     void test_start(cute::test const &test, const cute::suite& suite) override
     {
-              std::cout<<"test_start  function before at"<<std::endl;
 
-      auto suite_ptr = suites.at(&suite);
-      const std::lock_guard<std::mutex> lock(tests_i_mutex);  
-      auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);  
+      try{
+          auto suite_ptr = suites.at(&suite);
+          const std::lock_guard<std::mutex> lock(tests_i_mutex);  
+          auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);  
       
       //std::cout << "🟥 Test <" << test.name() << "> :: " << &test << "(th:" << std::this_thread::get_id() << ")" << std::endl;
 
-      auto er = tests.emplace(&test, test_run_ptr);
-      if(er.second) {
-        current_test_ = test_run_ptr;
+        auto er = tests.emplace(&test, test_run_ptr);
+        if(er.second) {
+          current_test_ = test_run_ptr;
 
-        if(suite_ptr) {
-          suite_ptr->tests.emplace_back(test_run_ptr);
+          if(suite_ptr) {
+            suite_ptr->tests.emplace_back(test_run_ptr);
+          }
+        }        
+
+        parallel_render_test_case_start(test_run_ptr);
+        }catch(const std::exception& e){
+          std::cerr << e.what() << '\n';
+          throw std::runtime_error("test_start  function before at");
         }
-      }        
 
-      parallel_render_test_case_start(test_run_ptr);
+
     }
 
     void test_success(cute::test const &test, char const *msg) override
     {
-                    std::cout<<"test_success  function before at"<<std::endl;
 
-      auto test_run_ptr = tests.at(&test);
-      test_run_ptr->done(test_run_outcome::Pass, msg);
+      try{
+        auto test_run_ptr = tests.at(&test);
+        test_run_ptr->done(test_run_outcome::Pass, msg);
+        parallel_render_test_case_end(test_run_ptr);
+      }catch(const std::exception& e){
+        std::cerr << e.what() << '\n';
+        throw std::runtime_error("test_success  function before at");
+      }
 
-      parallel_render_test_case_end(test_run_ptr);
+
     }
 
     void test_failure(cute::test const &test, cute::test_failure const &e) override
@@ -290,20 +308,30 @@ namespace tipi::cute_ext
       }
 
       ss << e.reason;
-        std::cout<<"test_failure  function before at"<<std::endl;
 
-      auto test_run_ptr = tests.at(&test);
-      test_run_ptr->done(test_run_outcome::Fail, ss.str());
+      try{
+        auto test_run_ptr = tests.at(&test);
+        test_run_ptr->done(test_run_outcome::Fail, ss.str());
+        parallel_render_test_case_end(test_run_ptr);
+      }
+      catch(const std::exception& e){
+        std::cerr << e.what() << '\n';
+        throw std::runtime_error("test_failure  function before at");
+      }
       
-      parallel_render_test_case_end(test_run_ptr);
     }
 
     void test_error(cute::test const &test, char const *what) override
-    {
-      auto test_run_ptr = tests.at(&test);
-      test_run_ptr->done(test_run_outcome::Error, what);
-
-      parallel_render_test_case_end(test_run_ptr);
+    {        std::cout<<"test_error  function before at"<<std::endl;
+      try{
+        auto test_run_ptr = tests.at(&test);
+        test_run_ptr->done(test_run_outcome::Error, what);
+        parallel_render_test_case_end(test_run_ptr);
+      }
+      catch(const std::exception& e){
+        std::cerr << e.what() << '\n';
+        throw std::runtime_error("test_error  function before at");
+      }
     }
 
     virtual void parallel_render_preamble() = 0;

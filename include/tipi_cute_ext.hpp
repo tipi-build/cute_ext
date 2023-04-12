@@ -561,9 +561,14 @@ namespace tipi::cute_ext {
             tasks.begin(), 
             tasks.end(), 
             [&](auto &t) { 
-               std::cout<<"next_task_it 100 function before at"<<std::endl;
+              try{
               auto suite_ptr = all_suites_.at(t.get_suite_name());
               return t.was_started() == false && suite_ptr->run_setting == ext_run_setting::before_all; 
+              }
+              catch(const std::exception& e){
+                std::cerr << e.what() << '\n';
+                throw std::runtime_error("next_task_it 100 function before at");
+              }
             }
           );
 
@@ -575,9 +580,14 @@ namespace tipi::cute_ext {
             tasks.begin(), 
             tasks.end(), 
             [&](auto &t) { 
-              std::cout<<"next_task_it 200 function before at"<<std::endl;
+             try{
               auto suite_ptr = all_suites_.at(t.get_suite_name());
               return t.was_started() == false && suite_ptr->run_setting == ext_run_setting::normal; 
+              }
+              catch(const std::exception& e){
+                std::cerr << e.what() << '\n';
+                throw std::runtime_error("next_task_it 200 function before at");
+              }
             }
           );
 
@@ -589,10 +599,14 @@ namespace tipi::cute_ext {
             tasks.begin(), 
             tasks.end(), 
             [&](auto &t) { 
-                             std::cout<<"next_task_it 300 function before at"<<std::endl;
-
+              try{
               auto suite_ptr = all_suites_.at(t.get_suite_name());
               return t.was_started() == false && suite_ptr->run_setting == ext_run_setting::after_all; 
+              }
+              catch(const std::exception& e){
+                std::cerr << e.what() << '\n';
+                throw std::runtime_error("next_task_it 300 function before at");
+              }
             }
           );
 
@@ -626,9 +640,13 @@ namespace tipi::cute_ext {
         }
 
         if(inserted) {
-          std::cout<<"inserted 100 function before at"<<std::endl;
-          auto suite_ptr = all_suites_.at(suite_name);
-          listener.suite_begin(*suite_ptr, suite_name.c_str(), suite_ptr->size());
+          try{
+            auto suite_ptr = all_suites_.at(suite_name);
+            listener.suite_begin(*suite_ptr, suite_name.c_str(), suite_ptr->size());
+          }catch(const std::exception& e){
+            std::cerr << e.what() << '\n';
+            throw std::runtime_error("inserted 100 function before at");
+          }
         }        
       };
 
@@ -698,10 +716,11 @@ namespace tipi::cute_ext {
         auto nextit = next_task_it();
 
         if(nextit != tasks.end()) {
-          std::cout<<"start_next 100 function before at"<<std::endl;
-
           const std::string& suite_name = nextit->get_suite_name();
-          auto suite_ptr = all_suites_.at(suite_name);
+
+          try
+          {
+                    auto suite_ptr = all_suites_.at(suite_name);
 
           // remember if this unit was started in linear mode
           // because only those should be able to decide to exit
@@ -786,6 +805,15 @@ namespace tipi::cute_ext {
             opt.get_output() << std::flush;  // makes sure ctest prints something while the test runs...
           }
           return true;
+          }
+          catch(const std::exception& e)
+          {
+            std::cerr << e.what() << '\n';
+            throw std::runtime_error("start_next 300 function before at");
+
+          }
+
+          return false;
         }
 
         return false;
