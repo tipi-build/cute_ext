@@ -248,7 +248,7 @@ namespace tipi::cute_ext
           }
 
         }
-        catch(const std::exception& e){
+        catch(const std::out_of_range& e){
           std::cerr << e.what() << '\n';
           throw std::runtime_error("suite_end  function before at");
         }
@@ -276,7 +276,7 @@ namespace tipi::cute_ext
         }        
 
         parallel_render_test_case_start(test_run_ptr);
-        }catch(const std::exception& e){
+        }catch(const std::out_of_range& e){
           std::cerr << e.what() << '\n';
           throw std::runtime_error("test_start  function before at");
         }
@@ -293,7 +293,7 @@ namespace tipi::cute_ext
         auto test_run_ptr = tests.at(&test);
         test_run_ptr->done(test_run_outcome::Pass, msg);
         parallel_render_test_case_end(test_run_ptr);
-      }catch(const std::exception& e){
+      }catch(const std::out_of_range& e){
         std::cerr << e.what() << '\n';
         std::cout<<"name of test search "<<test.name()<<std::endl;
         std::cout<<"map "<<std::endl;
@@ -321,7 +321,7 @@ namespace tipi::cute_ext
         test_run_ptr->done(test_run_outcome::Fail, ss.str());
         parallel_render_test_case_end(test_run_ptr);
       }
-      catch(const std::exception& e){
+      catch(const std::out_of_range& e){
         std::cerr << e.what() << '\n';
         throw std::runtime_error("test_failure  function before at");
       }
@@ -335,7 +335,7 @@ namespace tipi::cute_ext
         test_run_ptr->done(test_run_outcome::Error, what);
         parallel_render_test_case_end(test_run_ptr);
       }
-      catch(const std::exception& e){
+      catch(const std::out_of_range& e){
         std::cerr << e.what() << '\n';
         throw std::runtime_error("test_error  function before at");
       }
