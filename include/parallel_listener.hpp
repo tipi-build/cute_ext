@@ -303,7 +303,7 @@ namespace tipi::cute_ext
 
        
         
-        for (auto t : tests){
+        for (auto &t : tests){
           std::cout<<t.first->name()<<std::endl;
           std::cout<<&t<<std::endl;
 
