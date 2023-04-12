@@ -288,7 +288,8 @@ namespace tipi::cute_ext
     {
 
       try{
-        auto test_run_ptr = tests.at(&test);
+        auto it  = tests.find(&test);
+        auto test_run_ptr = it->second;
         test_run_ptr->done(test_run_outcome::Pass, msg);
         parallel_render_test_case_end(test_run_ptr);
       }catch(const std::out_of_range& e){
@@ -326,7 +327,8 @@ namespace tipi::cute_ext
       ss << e.reason;
 
       try{
-        auto test_run_ptr = tests.at(&test);
+ auto it  = tests.find(&test);
+        auto test_run_ptr = it->second;
         test_run_ptr->done(test_run_outcome::Fail, ss.str());
         parallel_render_test_case_end(test_run_ptr);
       }
@@ -340,7 +342,7 @@ namespace tipi::cute_ext
     void test_error(cute::test const &test, char const *what) override
     { 
       try{
-        auto test_run_ptr = tests.at(&test);
+ auto it  = tests.find(&test);
         test_run_ptr->done(test_run_outcome::Error, what);
         parallel_render_test_case_end(test_run_ptr);
       }
