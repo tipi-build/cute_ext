@@ -322,7 +322,7 @@ namespace tipi::cute_ext
     }
 
     void test_error(cute::test const &test, char const *what) override
-    {        std::cout<<"test_error  function before at"<<std::endl;
+    { 
       try{
         auto test_run_ptr = tests.at(&test);
         test_run_ptr->done(test_run_outcome::Error, what);
