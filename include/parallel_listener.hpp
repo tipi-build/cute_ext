@@ -286,11 +286,7 @@ namespace tipi::cute_ext
 
     void test_success(cute::test const &test, char const *msg) override
     {
-      std::cout<<"name of test search "<<test.name()<<std::endl;
-      std::cout<<"map "<<std::endl;
-      for (auto t : tests){
-        std::cout<<t.first->name()<<std::endl;
-      }
+
 
 
       try{
@@ -299,6 +295,11 @@ namespace tipi::cute_ext
         parallel_render_test_case_end(test_run_ptr);
       }catch(const std::exception& e){
         std::cerr << e.what() << '\n';
+        std::cout<<"name of test search "<<test.name()<<std::endl;
+        std::cout<<"map "<<std::endl;
+        for (auto t : tests){
+          std::cout<<t.first->name()<<std::endl;
+        }
         throw std::runtime_error("test_success  function before at");
       }
 
