@@ -300,8 +300,8 @@ namespace tipi::cute_ext
        
         
         for (auto &t : tests){
-          std::cout<<"a test of the map"<<t.first->name()<<std::endl;
-          std::cout<<"a test adress of the map"<<&t<<std::endl;
+          std::cout<<"a test of the map "<<t.first->name()<<std::endl;
+          std::cout<<"a test adress of the map "<<&t<<std::endl;
 
         }
 
