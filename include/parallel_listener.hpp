@@ -284,7 +284,7 @@ namespace tipi::cute_ext
 
     }
 
-    void test_success(cute::test const test, char const *msg) override
+    void test_success(cute::test const &test, char const *msg) override
     {
 
 
