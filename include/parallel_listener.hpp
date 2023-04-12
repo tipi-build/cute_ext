@@ -342,7 +342,9 @@ namespace tipi::cute_ext
     void test_error(cute::test const &test, char const *what) override
     { 
       try{
- auto it  = tests.find(&test);
+        auto it  = tests.find(&test);
+                auto test_run_ptr = it->second;
+
         test_run_ptr->done(test_run_outcome::Error, what);
         parallel_render_test_case_end(test_run_ptr);
       }
