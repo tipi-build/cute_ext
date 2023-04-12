@@ -300,11 +300,19 @@ namespace tipi::cute_ext
 
         std::cout<<"map "<<std::endl;
         std::cout<<msg<<std::endl;
+
+       
+        
         for (auto t : tests){
           std::cout<<t.first->name()<<std::endl;
           std::cout<<&t<<std::endl;
 
         }
+
+         if(tests.find(&test)!=tests.end()){
+          std::cout<<"trouver trouver";
+
+         }
         throw std::runtime_error("test_success  function before at");
       }
 
