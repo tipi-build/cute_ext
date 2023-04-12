@@ -37,7 +37,7 @@ namespace tipi::cute_ext
     /// @brief Mark a test/unit as PASS
     /// @param test 
     /// @param msg 
-    virtual void test_success(cute::test const &test, char const *msg) = 0;
+    virtual void test_success(cute::test const test, char const *msg) = 0;
     
     /// @brief Mark a test/unit as FAILED
     /// @param test 
