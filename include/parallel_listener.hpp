@@ -153,9 +153,21 @@ namespace tipi::cute_ext
 
     std::mutex suites_i_mutex;
     std::unordered_map<const cute::suite*, std::shared_ptr<suite_run>> suites{};
-    
+
+    /// \brief locked read of the unordered_map 
+    std::shared_ptr<suite_run> get_suite_run(const cute::suite& suite) {
+      const std::lock_guard<std::mutex> lock(suites_i_mutex);
+      return suites.at(&suite);
+    }
+
     std::mutex tests_i_mutex;
     std::unordered_map<const cute::test*, std::shared_ptr<test_run>> tests{};
+
+    /// \brief locked read of the unordered_map 
+    std::shared_ptr<test_run> get_test_run(const cute::test& test) {
+      const std::lock_guard<std::mutex> lock(tests_i_mutex);
+      return tests.at(&test);
+    }    
 
     std::shared_ptr<suite_run> current_suite_;
     std::shared_ptr<test_run> current_test_;
@@ -223,54 +235,53 @@ namespace tipi::cute_ext
 
     void suite_end(cute::suite const &suite, char const *info) override
     {
-      if(suites.find(&suite) != suites.end()) {
-        auto suite_ptr = suites.at(&suite);
-        suite_ptr->done(info);      
+      auto suite_ptr = get_suite_run(suite);
+      suite_ptr->done(info);      
 
-        auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
-        const auto lock = this->acquirex(sot);
+      auto &sot = (render_immediate_mode) ? out : suite_ptr->out;
+      const auto lock = this->acquirex(sot);
 
-        if(!render_immediate_mode) {
-          parallel_render_suite_header(sot, suite_ptr);
+      if(!render_immediate_mode) {
+        parallel_render_suite_header(sot, suite_ptr);
 
-          for(const auto &t : suite_ptr->tests) {
-            const auto testout_guard = this->acquirex(t->out);   // makes shure it was completely written
-            sot << t->out.str();
-          }
+        for(const auto &t : suite_ptr->tests) {
+          const auto testout_guard = this->acquirex(t->out);   // makes shure it was completely written
+          sot << t->out.str();
         }
+      }
 
-        parallel_render_suite_footer(sot, suite_ptr);
+      parallel_render_suite_footer(sot, suite_ptr);
 
-        if(!render_immediate_mode) {
-          const auto lock = this->acquirex(out);
-          out << suite_ptr->out.str();
-        }
+      if(!render_immediate_mode) {
+        const auto lock = this->acquirex(out);
+        out << suite_ptr->out.str();
       }
     }
 
     void test_start(cute::test const &test, const cute::suite& suite) override
     {
-      auto suite_ptr = suites.at(&suite);
-      const std::lock_guard<std::mutex> lock(tests_i_mutex);  
-      auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);  
-      
-      //std::cout << "🟥 Test <" << test.name() << "> :: " << &test << "(th:" << std::this_thread::get_id() << ")" << std::endl;
+      auto suite_ptr =  get_suite_run(suite);
+      auto test_run_ptr = std::make_shared<test_run>(test.name(), suite_ptr);      
 
-      auto er = tests.emplace(&test, test_run_ptr);
-      if(er.second) {
-        current_test_ = test_run_ptr;
+      // min locking scope
+      {
+        const std::lock_guard<std::mutex> lock(tests_i_mutex);  
+        auto er = tests.emplace(&test, test_run_ptr);
+        if(er.second) {
+          current_test_ = test_run_ptr;
 
-        if(suite_ptr) {
-          suite_ptr->tests.emplace_back(test_run_ptr);
+          if(suite_ptr) {
+            suite_ptr->tests.emplace_back(test_run_ptr);
+          }
         }
-      }        
+      }
 
       parallel_render_test_case_start(test_run_ptr);
     }
 
     void test_success(cute::test const &test, char const *msg) override
     {
-      auto test_run_ptr = tests.at(&test);
+      auto test_run_ptr = get_test_run(test);
       test_run_ptr->done(test_run_outcome::Pass, msg);
 
       parallel_render_test_case_end(test_run_ptr);
@@ -286,7 +297,7 @@ namespace tipi::cute_ext
 
       ss << e.reason;
 
-      auto test_run_ptr = tests.at(&test);
+      auto test_run_ptr = get_test_run(test);
       test_run_ptr->done(test_run_outcome::Fail, ss.str());
       
       parallel_render_test_case_end(test_run_ptr);
@@ -294,7 +305,7 @@ namespace tipi::cute_ext
 
     void test_error(cute::test const &test, char const *what) override
     {
-      auto test_run_ptr = tests.at(&test);
+      auto test_run_ptr = get_test_run(test);
       test_run_ptr->done(test_run_outcome::Error, what);
 
       parallel_render_test_case_end(test_run_ptr);
