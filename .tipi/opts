@@ -1,0 +1,5 @@
+IF (WIN32)
+  add_compile_definitions(NOMINMAX) 
+ENDIF()
+
+add_compile_definitions(TERMCOLOR_USE_ANSI_ESCAPE_SEQUENCES) 

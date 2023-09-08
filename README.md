@@ -6,112 +6,181 @@ Making CUTEtest a bit... cuter?
 Features
 --------
 
-- proper command line args handling
-- beautiful output (with `--listener=modern` / by default) with execution times etc
-- useful filtering (now regex based, so `--filter="something|does_not_thow"` *works*) 
-- filter tests-suites `--filter-suite`
-- listing test cases `--list-testcases` / `-ltc`
-- select `cute::listerner` / formatter with `--listener`; valid options are: `ide`, `classic`, `xml`, `modern` (default)
-- select output type with `--output`; valid options are: `console` / `cout` (default), `error` / `cerr` or `<file-path>` (truncates previously existing content!)
-- `--help` / `-h` / `-?`
-- 🚀 `--maniac` mode: brute-force accelerate the test execution by rearanging the test suites to fit the maximum hardware parallelity for the executing machine (has a bit of ☣️ potential depending on the test design and selected process model)
-    - `--maniac=thread` (default) run all maniac suites in the same process on as many threads as deemed necessary
-    - `--maniac=process` spwans child processes as deemed necessary
-    - `-j <n-streads>` choose the level of concurrency if you like - defaults to `N hardware-threads + 1`
+* Beautiful output (with `--listener=modern` / by default if you pass a `tipi::cute_ext::modern_listener{}` to the cute runner)
+* Test execution times
+* Simple filtering (now regex based, so `--filter="something|does_not_thow"` *works*) 
+* Filter tests-suites `--filter-suite`
+* Listing test cases `--list-testcases` / `-ltc`
+* Select the output formatter with `--listener`; valid options are: `ide`, `classic`, `classicxml`, `modern` (default), `modernxml` 
+* Select output type with `--output`; valid options are: `console` / `cout` (default), `error` / `cerr` or `<file-path>` (truncates previously existing content!)
+    - Following placeholders are available for the `<file-path>` options:
+        - `{executable}` name of the test executable, ex: for a `test.exe` specifying `--output "result-{executable}.txt` would result in `result-test.exe.txt`
+        - `{timestamp}` unix timestamp in seconds
+* `--help` / `-h` / `-?`
+* 🚀 `--parallel` mode: brute-force accelerate the test execution by rearanging the test suites to fit the maximum hardware parallelity for the executing machine
+    - `--parallel` (default) run all maniac suites by spwaning child processes as deemed necessary
+    - `-j=<n-streads>` choose the level of concurrency if you like - defaults to `N hardware-threads + 1`
 
-The output of `test/main --run`
+The output of `test/main --parallel --force-listener --listener=modern`
 
 ```bash
-🧫 Test suite: Suite 1 (2 tests)
-
- 🧪 OutTests::mySimpleTest::s1_1            🟢 PASS    (56ms)
- 🧪 OutTests::anotherTest::s1_1             🟢 PASS    (62ms)
-
-  | Suite   🟢 PASS (0.118707s)
-  | Tests   2
-  | Pass    2
-
-🧫 Test suite: Suite 2 (20 tests)
-
- 🧪 OutTests::throwingtest::1               🟥 FAILED  (0ms)
+🏃Awesome testing with tipi.build + CUTE
+ -> Starting test at: Thu Jan 26 13:41:26 2023 - [16747368865755976]
 -------------------------------------------------------------------------------
-Unhandled exception:
-Blah!
--------------------------------------------------------------------------------
- 🧪 OutTests::anotherTest::2                🟢 PASS    (62ms)
- 🧪 OutTests::mySimpleTest::3               🟢 PASS    (63ms)
- 🧪 OutTests::anotherTest::4                🟢 PASS    (63ms)
- 🧪 OutTests::mySimpleTest::5               🟢 PASS    (62ms)
- 🧪 OutTests::anotherTest::6                🟢 PASS    (62ms)
- 🧪 OutTests::mySimpleTest::7               🟢 PASS    (62ms)
- 🧪 OutTests::anotherTest::8                🟢 PASS    (63ms)
- 🧪 OutTests::mySimpleTest::9               🟢 PASS    (62ms)
- 🧪 OutTests::anotherTest::10               🟢 PASS    (62ms)
- 🧪 OutTests::mySimpleTest::11              🟢 PASS    (62ms)
- 🧪 OutTests::anotherTest::12               🟢 PASS    (62ms)
- 🧪 OutTests::mySimpleTest::13              🟢 PASS    (61ms)
- 🧪 OutTests::anotherTest::14               🟢 PASS    (62ms)
- 🧪 OutTests::failingtest::15               🟥 FAILED  (0ms)
--------------------------------------------------------------------------------
-C:\.tipi\v3.w\37dda8d-cute-ext\test\main.cpp:29
-OutTests::failingtest: 42 == 0 expected:     42      but was:        0
--------------------------------------------------------------------------------
- 🧪 OutTests::anotherTest::16               🟢 PASS    (62ms)
- 🧪 OutTests::mySimpleTest::17              🟢 PASS    (62ms)
- 🧪 OutTests::anotherTest::18               🟢 PASS    (62ms)
- 🧪 OutTests::mySimpleTest::19              🟢 PASS    (63ms)
- 🧪 OutTests::anotherTest::20               🟢 PASS    (61ms)
 
-  | Suite   🟥 FAILED (1.12822s)
-  | Tests   20
-  | Pass    18
-  | Failed  2
+
+ (....SNIP....)
+
+
+ 🧫 Suite 3
+===============================================================================
+
+ 🧪 OutTests::anotherTest::s3_0             🟢 PASS          (884.69ms)
+ 🧪 OutTests::anotherTest::s3_1             🟢 PASS          (897.751ms)
+ 🧪 OutTests::anotherTest::s3_2             🟢 PASS          (897.342ms)
+ (....SNIP....)
+ 🧪 OutTests::anotherTest::s3_193           🟢 PASS          (219.966ms)
+ 🧪 OutTests::anotherTest::s3_194           🟢 PASS          (201.506ms)
+ 🧪 OutTests::anotherTest::s3_195           🟢 PASS          (183.948ms)
+ 🧪 OutTests::anotherTest::s3_196           🟢 PASS          (185.702ms)
+ 🧪 OutTests::anotherTest::s3_197           🟢 PASS          (201.634ms)
+ 🧪 OutTests::anotherTest::s3_198           🟢 PASS          (188.536ms)
+ 🧪 OutTests::anotherTest::s3_199           🟢 PASS          (205.571ms)
+ 🧪 OutTests::throwingtest::s3_201          ❌ ERROR         (141.919ms)
+ :> Hallo EH TDG ]]> blub
+ :> --- uncaught std::runtime_error
+ :> --- exception message start ---
+ :> Blah!
+ :> --- exception message end ---
+
+
+  | Suite     🟥 FAILED (4.38208s)
+  | Tests     201
+  | Pass      200
+  | Errored   1
+
+ (....SNIP....)
 
 
 Test stats:
- - suites executed:     2
- - test cases executed: 22
- - total duration:      1.236s
+ - suites executed:     5
+ - suites passed:       1
+ - suites failed:       4
+ - test cases executed: 227
+ - total test time:     63.0452s
+ - total user time:     4.62761s
 
-Result 🟥 FAILED
+🟥 FAILED 🟥
 ```
 
-How-to
-------
+How-to migrate from the original cute
+--------------
 
-Add `tipi::cute_ext` to your `.tipi/deps` and adapt your test-executable entry point to use the `tipi::cute_ext::wrapper`
+1. Add `tipi-build/cute_ext` to your `.tipi/deps`
+2. cute\_ext is a drop-in replacement and replaces the original Petersommerlad/CUTE by wrapping it, no code changes required.
+3. That's it : ` your-test.exe --force-listener --listener=modern --parallel`
+
+🚀 Want speed ? Add  `--parallel` to the line.
+
 
 ```cpp
 #include <cute/cute.h>
-#include <tipi_cute_ext.hpp>
 
-/* [snip - test functions - see /test/main.cpp for full example]*/
+int main(int argc, const char *argv[])
+{
+    cute::xml_file_opener xmlfile(argc, argv);
+    cute::xml_listener < cute::ide_listener<> > lis(xmlfile.out);
 
-int main(int argc, char *argv[]){
-	tipi::cute_ext::wrapper wrapper(argc, argv);
+    auto runner = cute::makeRunner(lis, argc, argv);
 
-  cute::suite s1{};
-  s1.push_back(CUTE_SMEMFUN(OutTests, mySimpleTest));
-  s1.push_back(CUTE_SMEMFUN(OutTests, anotherTest));
-  wrapper.register_suite(s1, "Suite 1");
-  // .... rince and repeat the above
-
-  try {
-    wrapper.process_cmd();
-  }
-  catch(const std::exception &ex) {
-    std::cout << "Failed to run\n" << ex.what() << std::endl;
-    return -1;
-  }
-  
-  return 0;
-}
+   ...
 ```
+
+Controlling the test case execution in auto-parallel mode
+---------------------------------------------------------
+
+Executing the test suites in auto-parallel mode can uncover execution order dependencies and/or shared state issues, which can - in some cases - be due to the test design or system architecture.
+
+To enable using the automatic parallelization on parts of the test suite only whitout creating additional test executables one can add a options to force executing singular suites in linear mode, and or forcing a point in time of execution (`tipi::cute_ext::ext_run_setting::before_all`, `tipi::cute_ext::ext_run_setting::normal` or `tipi::cute_ext::ext_run_setting::after_all`).
+
+Forcing the execution to `force_linear` has the following behavior:
+
+- waiting for all tests running in parallel mode to finish
+- run the `force_linear`'ed suite one test case at a time, in the order their are added to the suite
+- switch back to auto-parallel mode after all tests are finished
+
+**NOTE:** The run settings only apply when running the test executable in `--parallel` mode.
+
+- `tipi::cute_ext::ext_run_setting::normal`: default / no change
+- `tipi::cute_ext::ext_run_setting::before_all`: the registered suite is executed before all `normal` ones. If multiple suites are registered as `before_all` the registration order in that subset is taken into account again.
+- `tipi::cute_ext::ext_run_setting::after_all`: the registered suite is executed after all `normal` ones. If multiple suites are registered as `after_all` the registration order in that subset is taken into account again.
+
+
+#### Order of execution example:
+
+The order of execution of the following sample in auto-parallel mode would be
+
+```
+                    // ext_run_setting  ; force_linear
+      S.3           // ::before_all     ; false
+       |  S.4       // ::before_all     ; false
+       \   /        //
+        S.5         // ::before_all     ; *true*
+       /   \        //
+      S.1  |        // ::normal         ; false
+       |  S.2       // ::normal         ; false
+       \   /        // 
+        S.6         // ::normal         ; *true*
+        /|\         //
+   /---+-+-+---\    //
+   |   |   |   |    //
+  S.7  |   |   |    //
+   |  S.8  |   |    // ::after_all      ; false
+   |   |  S.9  |    // ::after_all      ; false
+   |   |   |  S.10  // ::after_all      ; false
+   |   |   |   |    // 
+   \---+-+-+---/    //
+        \|/         // 
+        S.11        // ::after_all      ; *true*
+```
+
+```cpp
+using tipi::cute_ext; // Load the order of execution parameters
+
+auto runner = cute::makeRunner(lis, argc, argv);
+
+/**
+ * @brief  Register a new suite and - depending on CLI arguments - run the suite immediately
+ * @param suite the cute::suite to execute
+ * @param name name of the suite
+ * @param run_setting ext_run_setting::normal / ext_run_setting::before_all / ext_run_setting::after_all
+ * @param force_linear set to true to force running this suite in linear mode
+ */
+ void runner::operator()(const cute::suite& suite, const std::string& name, ext_run_setting run_setting = ext_run_setting::normal, bool force_linear = false);
+
+runner(suite_1, "Suite 1");  /* implicit, run_setting = ext_run_setting::normal, force_linear = false */
+runner(suite_2, "Suite 2");
+runner(suite_3, "Suite 3",   ext_run_setting::before_all,  false);
+runner(suite_4, "Suite 4",   ext_run_setting::before_all,  false);
+runner(suite_5, "Suite 5",   ext_run_setting::before_all,  true);
+runner(suite_6, "Suite 6",   ext_run_setting::normal,      true);
+runner(suite_7, "Suite 7",   ext_run_setting::normal,      false);
+runner(suite_8, "Suite 8",   ext_run_setting::after_all,   false);
+runner(suite_8, "Suite 9",   ext_run_setting::after_all,   false);
+runner(suite_8, "Suite 10",  ext_run_setting::after_all,   false);
+runner(suite_9, "Suite 11",  ext_run_setting::after_all,   true);
+```
+
+
+Advanced topics
+---------------
+  * [Controlling autoparallel child parameter and environment (gcov support)](docs/ADVANCED_CHILD_PROCESS_ENV_AND_PARAMS.md)
+
 
 Licence
 -------
 
-The sources in this repository are currently proprietarty software by tipi technologies AG.
+The sources in this repository are currently proprietary software by tipi technologies AG and licensed to owner of tipi.build pro subcriptions.
 
 CUTE test is licenced under the MIT licence and made by Peter Somerlad: https://github.com/PeterSommerlad/CUTE - see the respective LICENCE file.
 

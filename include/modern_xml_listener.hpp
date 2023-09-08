@@ -4,38 +4,36 @@
 #include <iostream>
 #include <sstream>
 #include <atomic>
+#include <algorithm>
 
-#include <cute/cute_listener.h>
 #include <termcolor/termcolor.hpp>
+#include <original/CUTE/cute/cute.h>
+
+#include "parallel_listener.hpp"
 
 namespace tipi::cute_ext
 {
   using namespace std::string_literals;
 
-  template <typename Listener = cute::null_listener>
-  struct modern_xml_listener : Listener
-  { 
-    bool wrap_testsuite_elem;
-    std::ostream &out;
-    std::atomic<size_t> suite_expected = 0;
-    std::atomic<size_t> suite_failures = 0;
-    std::atomic<size_t> suite_errors = 0;
-    std::atomic<size_t> suite_success = 0;
+  struct modern_xml_listener : public parallel_listener
+  {
+    protected:
 
-    std::map<const cute::suite*, std::chrono::steady_clock::time_point> suite_start_times{};
-    std::map<const cute::test*, std::chrono::steady_clock::time_point> test_start_times{};
+    /// @brief replaces ]]> with ]]]]><![CDATA[> in CDATA sections
+    /// @param in 
+    /// @return 
+    std::string escape_cdata(std::string in) {
+      const std::string search = "]]>";
+      const std::string replace = "]]]]><![CDATA[>";
+      
+      size_t pos = 0;
+      while((pos = in.find(search, pos)) != std::string::npos) {
+        in.replace(pos, search.length(), replace);
+        pos += replace.length();
+      }
 
-    // a bit more details in the test case and suite streams
-    std::stringstream current_suite_stream{};
-    std::stringstream current_tests_stream{};
-
-    std::string current_suite_name;
-    std::string current_test_name;
-
-    std::vector<std::chrono::milliseconds> test_case_durations{};
-    std::vector<std::string> failed_tests{};
-
-  protected:
+      return in;
+    }
 
     std::string mask_xml_chars(std::string in){
 			std::string::size_type pos=0;
@@ -57,237 +55,201 @@ namespace tipi::cute_ext
 		}
 
   public:
-    modern_xml_listener(std::ostream &os = std::cerr, bool wrap_testsuite_elem = false)
-      : wrap_testsuite_elem(wrap_testsuite_elem)
-      , out(os)
-    {
-      if(wrap_testsuite_elem) {
-        out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            << "<testsuite>\n";
+
+    modern_xml_listener(std::ostream &os = std::cerr) : parallel_listener(os) {
+    }
+    
+    ~modern_xml_listener() {
+    }
+
+    void virtual parallel_render_preamble() override {
+      if(this->render_listener_info) {
+        this->out 
+          << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+          << "<testsuites>\n";
       }
     }
 
-    ~modern_xml_listener() {
-
+    void virtual parallel_render_end() override {
       using namespace std::chrono_literals;
 
-      auto total_time_ms = 0ms;
+      if(this->render_listener_info) {
+        double total_time_ms = 0;
 
-      for(auto& v : test_case_durations) {
-        total_time_ms += v;
-      }
+        for(auto &[test, test_ptr] : this->tests) {
+          total_time_ms += test_ptr->get_test_duration().count();         
+        }
 
-      auto total_time = std::chrono::duration_cast<std::chrono::duration<double>>(total_time_ms);
+        auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);      
+        auto count_suites_pass = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success(); });
+        auto count_suites_fail = std::count_if(this->suites.begin(), this->suites.end(), [](auto &p) { return p.second->is_success() == false; });    
 
-      // duration_s = total_time;
-      const auto INDENT = "  ";
-      out << INDENT << "<!--\n"
+        const auto INDENT = "  ";
+    
+        this->out 
+          << INDENT << "<!--\n"
           << INDENT << INDENT << "tipi::cute_ext details \n"
           << INDENT << INDENT << "Test stats: \n"
-          << INDENT << INDENT << " - suites executed:     " << suite_start_times.size() << "\n"
-          << INDENT << INDENT << " - test cases executed: " << test_start_times.size() << "\n"
-          << INDENT << INDENT << " - total duration:      " << total_time.count() << "s\n" 
-          << INDENT << INDENT << "Result " << ((suite_failures == 0) ? "PASS" : "FAILED") << "\n"
+          << INDENT << INDENT << " - suites executed:     " << this->suites.size() << "\n"
+          << INDENT << INDENT << " - suites passed:       " << count_suites_pass << "\n"
+          << INDENT << INDENT << " - suites failed:       " << count_suites_fail << "\n"
+          << INDENT << INDENT << "\n"
+          << INDENT << INDENT << " - test cases executed: " << this->tests.size() << "\n"
+          << INDENT << INDENT << " - total test time:     " << total_time_ms << "s\n" 
+          << INDENT << INDENT << " - total user time:     " << user_total_time_ms.count() << "s\n"
           << INDENT << "-->\n";
 
-      if(wrap_testsuite_elem) {
-        out << "</testsuite>\n";
+        this->out << "</testsuites>\n";
+        this->out << std::flush;
       }
     }
 
-    void begin(cute::suite const &suite, char const *info, size_t n_of_tests)
-    {
-      suite_start_times.insert({ &suite, std::chrono::steady_clock::now() });
-      suite_failures.exchange(0);
-      suite_success.exchange(0);
-      suite_errors.exchange(0);
-      suite_expected.exchange(n_of_tests);
+    virtual void parallel_render_suite_header(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+      if(this->render_suite_info) {
 
-      current_suite_stream = std::stringstream{};
-      current_suite_name = std::string(info);
-    
-      Listener::begin(suite, info, n_of_tests);
+        const auto INDENT = "  "; // level 1 indenting
+
+        sot << INDENT << "<testsuite "
+            << "name=\"" << mask_xml_chars(suite_ptr->name) << "\" "
+            << "tests=\"" << suite_ptr->count_expected << "\"";
+
+        if(suite_ptr->end.has_value()) {
+          sot << " "
+              << "errors=\"" << suite_ptr->count_errors << "\" "
+              << "failures=\"" << suite_ptr->count_failures << "\"";
+        }
+
+        sot << ">\n";
+      }
     }
 
-    void end(cute::suite const &suite, char const *info)
-    {
-      auto suite_finished_ts = std::chrono::steady_clock::now();
-
-      /**
-       <testsuite errors="0" failures="0" id="0" name="my test suite" tests="1">
-           .....
-      </testsuite>
-       */      
-
-      const auto INDENT = "  "; // level 1 indenting
-
-      out << INDENT
-          << "<testsuite "
-          <<  "errors=\"" << suite_errors << "\" "
-          <<  "failures=\"" << suite_failures << "\" "
-          <<  "name=\"" << mask_xml_chars(info) << "\" "
-          <<  "tests=\"" << suite_expected << "\"";
-
-      /* calulate how long the suite took */
-      if(suite_start_times.find(&suite) != suite_start_times.end()) {
-        auto suite_duration_s = std::chrono::duration_cast<std::chrono::duration<double>>(suite_finished_ts - suite_start_times[&suite]);
-        out <<  " time=\"" << suite_duration_s.count() << "\"";
+    virtual void parallel_render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) override {
+      if(this->render_suite_info) {
+        
+        const auto INDENT = "  "; // level 1 indenting
+        sot << INDENT << "</testsuite>\n";
       }
+    }
 
-      out << ">\n";
+    virtual void parallel_render_test_case_header(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
+      if(this->render_test_info) {
+        
+        const auto INDENT = "    ";
+        
+        /**
+          <testcase assertions="" classname="" name="" [ remainder for the rest...  time="">
+              <skipped/>
+              <error message="" type=""/>
+              <failure message="" type=""/>
+              <system-out/>
+              <system-err/>
+          </testcase> ]
 
-      out << current_suite_stream.str();
+          see:
+            - success(...)
+            - failure(...)
+            - error(...)
+        */
+
+        tco << INDENT
+            << "<testcase "
+            <<  "name=\"" << mask_xml_chars(unit->name) << "\" ";
+
+      }        
+    }
+
+    virtual void parallel_render_test_case_start(const std::shared_ptr<test_run> &unit) override {
+      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
+
+      if(this->render_immediate_mode) {
+        this->parallel_render_test_case_header(tco, unit);
+      }
+    }
+
+    virtual void parallel_render_test_case_result(std::ostream &tco, const std::shared_ptr<test_run> &unit) override {
       
-      out << INDENT
-          << "</testsuite>\n";
-
-      Listener::end(suite, info);
-    }
-
-    void start(cute::test const &test)
-    {
-      test_start_times.insert({ &test, std::chrono::steady_clock::now() });
-      current_tests_stream = std::stringstream{};
 
       const auto INDENT = "    ";
-      
-      /**
-        <testcase assertions="" classname="" name="" [ remainder for the rest...  time="">
-            <skipped/>
-            <error message="" type=""/>
-            <failure message="" type=""/>
-            <system-out/>
-            <system-err/>
-        </testcase> ]
 
-        see:
-          - success(...)
-          - failure(...)
-          - error(...)
+      /**
+        The first bit was written by render_test_case_start(...)
+        [... <testcase assertions="" classname="" name=""... ]
        */
 
-      current_tests_stream 
-        << INDENT
-        << "<testcase "
-        <<  "name=\"" << mask_xml_chars(test.name()) << "\" ";
+      /* render the time the test took */
+      tco << "time=\"" << unit->get_test_duration().count() << "\"";
 
-      Listener::start(test);
-    }
-
-    void success(cute::test const &test, char const *msg)
-    {
-      auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_success++;
-      
-      /**
-        The first bit was written in start(...)
-        [... <testcase assertions="" classname="" name=""... ] time=""></testcase>
+      /** PASS xml:
+       * 
+       * [ <testcase assertions="" classname="" name=""... ]  time="..."></testcase>
        */
+      if(unit->outcome == test_run_outcome::Pass) {
+        tco << "></testcase>\n";
+      }
+      /**
+       * FAIL xml:
+       * 
+       * [<testcase assertions="" classname="" name=""... ] time="">
+       *    <failure message="" type=""/>
+       *    <system-out/>
+       *    <system-err/>
+       * </testcase>
+       */
+      else if(unit->outcome == test_run_outcome::Fail) {
 
-      /* calulate how long the suite took */
-      if(test_start_times.find(&test) != test_start_times.end()) {
-        auto duration_s = std::chrono::duration_cast<std::chrono::milliseconds>(test_finished_ts - test_start_times[&test]);
-        test_case_durations.push_back(duration_s);
-        current_tests_stream << "time=\"" << duration_s.count() << "\"";
+        tco << ">\n"
+            << INDENT 
+            << "  " // +1/2
+            << "<failure />\n"
+            << INDENT
+            << "  " // +1/2
+            << "<system-out><![CDATA[\n"
+            << escape_cdata(unit->info.str())
+            << "]]></system-out>\n"
+            << INDENT
+            << "</testcase>\n";
+      }
+      else if(unit->outcome == test_run_outcome::Error) {
+        tco << ">\n"
+            << INDENT 
+            << "  " // +1/2 
+            << "<error type=\"Unhandled exception\"/>\n"
+            << INDENT
+            << "  " // +1/2
+            << "<system-out><![CDATA[\n"
+            << escape_cdata(unit->info.str())
+            << "]]></system-out>\n"
+            << INDENT
+            << "</testcase>\n";
+      }
+      else {
+        tco << ">\n"
+            << INDENT 
+            << "  " // +1/2 
+            << "<error message=\"RUNNING/Unknown\" type=\"RUNNING/Unknown\"/>\n"
+            << INDENT
+            << "</testcase>\n";
       }
 
-      current_tests_stream 
-        << "></testcase>\n";
-
-
-      current_suite_stream << current_tests_stream.str();
-
-      Listener::success(test, msg);
+      tco << std::flush;
     }
 
-    void failure(cute::test const &test, cute::test_failure const &e)
-    {
-      auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_failures++;
+    virtual void parallel_render_test_case_end(const std::shared_ptr<test_run> &unit) override {
 
-      const auto INDENT = "     ";
+      auto &tco = (this->render_immediate_mode) ? this->out : unit->out;
 
-      /**
-        [ ... <testcase assertions="" classname="" name="" ... ] time="">
-            <skipped/>
-            <error message="" type=""/>
-            <failure message="" type=""/>
-            <system-out/>
-            <system-err/>
-        </testcase> ]
+      if(this->render_test_info) {
+        if(!this->render_immediate_mode) {
+          parallel_render_test_case_header(tco, unit);
+        }
 
-        see:
-          - success(...)
-          - failure(...)
-          - error(...)
-       */
-
-      /* calulate how long the suite took */
-      if(test_start_times.find(&test) != test_start_times.end()) {
-        auto duration_s = std::chrono::duration_cast<std::chrono::milliseconds>(test_finished_ts - test_start_times[&test]);
-        test_case_durations.push_back(duration_s);
-        current_tests_stream << "time=\"" << duration_s.count() << "\"";
+        parallel_render_test_case_result(tco, unit);        
       }
-
-      current_tests_stream 
-        << ">\n";
-
-      current_tests_stream 
-        << INDENT 
-        << "  " // +1/2
-        << "<failure message=\"" << mask_xml_chars(e.reason) << " in " << mask_xml_chars(e.filename) << ":" << e.lineno << "\"/>\n";
-
-      current_tests_stream 
-        << INDENT
-        << "</testcase>\n";
-
-      current_suite_stream << current_tests_stream.str();
-      Listener::failure(test, e);
-    }
-    void error(cute::test const &test, char const *what)
-    {
-      auto test_finished_ts = std::chrono::steady_clock::now();
-      suite_errors++;
-
-      const auto INDENT = "     ";
-
-      /**
-        [ ... <testcase assertions="" classname="" name="" ... ] time="">
-            <skipped/>
-            <error message="" type=""/>
-            <failure message="" type=""/>
-            <system-out/>
-            <system-err/>
-        </testcase> ]
-
-        see:
-          - success(...)
-          - failure(...)
-          - error(...)
-       */
-
-      /* calulate how long the suite took */
-      if(test_start_times.find(&test) != test_start_times.end()) {
-        auto duration_s = std::chrono::duration_cast<std::chrono::milliseconds>(test_finished_ts - test_start_times[&test]);
-        test_case_durations.push_back(duration_s);
-        current_tests_stream << "time=\"" << duration_s.count() << "\"";
-      }
-
-      current_tests_stream 
-        << ">\n";
-
-      current_tests_stream 
-        << INDENT 
-        << "  " // +1/2
-        << "<error message=\"" << what << "\" type=\"Unhandled exception\"/>\n";
-
-      current_tests_stream 
-        << INDENT
-        << "</testcase>\n";
-
-      current_suite_stream << current_tests_stream.str();
-      Listener::error(test, what);
+      else {
+        tco << unit->info.str();
+      } 
     }
   };
+
 
 }
