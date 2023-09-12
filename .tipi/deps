@@ -16,5 +16,13 @@
     "ikalnytskyi/termcolor": {
         "@": ":b3cb0f365f8435588df7a6b12a82b2ac5fc1fe95",
         "x": ["test/"]
-    }
+    },
+
+    "platform:linux-cxx17" : [ 
+        "target:::libc++abi.a" 
+    ],
+
+    "platform:linux" : [ 
+        "target:::libc++abi.a" 
+    ]
 }
