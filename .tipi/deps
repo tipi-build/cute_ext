@@ -1,7 +1,4 @@
 {
-    "sailormoon/flags": {
-        "@": ":4fe826161e0dcb093278126ae08b0b2cbab0e2f7"
-    },
     "GerHobbelt/tiny-process-library": {
         "@": ":2f7b3cf6d9972d096a77863e31c854f80194927d",
         "x:windows": ["test/", "example.cpp", "process_unix.cpp"],
@@ -16,5 +13,14 @@
     "ikalnytskyi/termcolor": {
         "@": ":b3cb0f365f8435588df7a6b12a82b2ac5fc1fe95",
         "x": ["test/"]
+    },
+    "jarro2783/cxxopts": {
+        "@": "v3.1.1"
+    },
+    "boostorg/boost": {
+        "@": "boost-1.80.0",
+        "u": true,
+        "packages" : [ "boost_system", "boost_filesystem" ], "targets" : [ "Boost::system", "Boost::filesystem" ],
+        "opts": "set(BOOST_INCLUDE_LIBRARIES system filesystem)"
     }
 }

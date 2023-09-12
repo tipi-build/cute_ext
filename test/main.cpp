@@ -16,8 +16,6 @@
 
 #include <termcolor/termcolor.hpp>
 
-#include <filesystem>
-
 #if defined(_WIN32)
 
 #include <windows.h>
@@ -40,12 +38,12 @@ public:
     int lifeTheUniverseAndEverything = 6*7;
 
     void mySimpleTest(){        
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        //std::this_thread::sleep_for(std::chrono::seconds(1));
         ASSERT_EQUAL(42, lifeTheUniverseAndEverything);
     }
 
     void mySimpleTestLong(){        
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        //std::this_thread::sleep_for(std::chrono::seconds(5));
         ASSERT_EQUAL(42, lifeTheUniverseAndEverything);
     }
 
@@ -122,7 +120,7 @@ void testfn(int argc, const char **argv) {
 	//cute::ostream_listener<> lis{std::cout};    
     //ynull_listener lis{};
 	
-    auto runner = cute::makeRunner(lis, argc, argv);
+    auto runner = tipi::cute_ext::makeRunner(lis, argc, argv);
 
 
     if(!runner.is_autoparallel_child()) {
@@ -157,7 +155,7 @@ void testfn(int argc, const char **argv) {
         
         pathbase_ss << "cute_ext_cov_" << current_pid << "/";
         std::string pathbase = pathbase_ss.str();
-        std::filesystem::create_directories(pathbase);
+        boost::filesystem::create_directories(pathbase);
 
         std::cout << "\n---\n" << "ℹ️ All coverage analysis files will be written to: " << pathbase << "\n---\n" << std::endl;
 
@@ -167,7 +165,7 @@ void testfn(int argc, const char **argv) {
             path_ss << pathbase << clean_path(suite_name) << "-" << clean_path(unit_name); 
 
             std::string path = path_ss.str();
-            std::filesystem::create_directories(path);           
+            boost::filesystem::create_directories(path);           
 
             env.emplace("GCOV_PREFIX", path);  
             env.emplace("GCOV_PREFIX_STRIP", "10000");  // clear all gcov generated folders
@@ -194,6 +192,46 @@ void testfn(int argc, const char **argv) {
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, mySimpleTest, "s1_1"));
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, anotherTest, "s1_1"));
     s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_1"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_2"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_3"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_4"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_5"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_6"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_7"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_8"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_9"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_10"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_11"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_12"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_13"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_14"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_15"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_16"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_17"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_18"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_19"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_20"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_21"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_22"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_23"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_24"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_25"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_26"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_27"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_28"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_29"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_30"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_31"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_32"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_33"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_34"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_35"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_36"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_37"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_38"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_39"));
+    s1.push_back(TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s1_40"));
+    
 
     cute::suite s2{};
     s2 += TIPI_CUTE_SMEMFUN(OutTests, throwingtest, "s2_0");
@@ -244,5 +282,6 @@ void testfn(int argc, const char **argv) {
 
 int main(int argc, const char **argv) {
     testfn(argc, argv);
+    std::cerr << "----------DONE---------------" << std::endl;
     return 0;
 }

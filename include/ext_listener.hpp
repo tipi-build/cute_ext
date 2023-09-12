@@ -3,7 +3,9 @@
 #include <original/CUTE/cute/cute_listener.h>
 #include "util.hpp"
 
-namespace tipi::cute_ext
+namespace tipi
+{
+namespace cute_ext
 {
   /// @brief virtual base 
   struct ext_listener {
@@ -55,4 +57,5 @@ namespace tipi::cute_ext
     /// @brief Render the test summary / footer to the run
     virtual void render_end() = 0;
   };
+}
 }

@@ -6,16 +6,14 @@
 #include <string>
 #include <functional>
 #include <iostream>
-#include <optional>
 #include <regex>
-#include <filesystem>
 #include <thread>
 #include <mutex>
 #include <future>
-#include <optional>
 #include <type_traits>
 #include <typeinfo>
 #include <set>
+#include <exception>
 
 #include <original/CUTE/cute/cute.h>
 
@@ -26,9 +24,11 @@
 #include <original/CUTE/cute/tap_listener.h>
 #include <original/CUTE/cute/xml_listener.h>
 
-#include <flags.h>
+#include <boost/filesystem.hpp>
 #include <process.hpp>
+#include <cxxopts.hpp>
 
+#include "stdx.hpp"
 #include "util.hpp"
 #include "ext_listener.hpp"
 #include "parallel_listener.hpp"
@@ -40,7 +40,9 @@
 #define TIPI_CUTE_EXT
 #endif 
 
-namespace tipi::cute_ext {
+namespace tipi {
+namespace cute_ext {
+
   using namespace std::string_literals;
 
   enum ext_run_setting {
@@ -108,12 +110,12 @@ namespace tipi::cute_ext {
 
     template <typename app_listener_T = cute::null_listener>
     struct wrapper_options {
+    
     private:
-      flags::args args_;
-
       std::ostream* out_stream_ = &std::cout;
       std::shared_ptr<std::fstream> file_out_ptr_;
       std::shared_ptr<ext_listener> listener_ptr_;
+
     public:
 
       std::string program_exe_path{};
@@ -143,29 +145,39 @@ namespace tipi::cute_ext {
       }
 
       wrapper_options(app_listener_T& listener, int argc, const char **argv, bool exit_on_destruction = true)
-        : args_(argc, const_cast<char **>(argv))
-        , exit_on_destruction(exit_on_destruction)
+        : exit_on_destruction(exit_on_destruction)
       {
         program_exe_path      = std::string(argv[0]);
+        cxxopts::Options options(program_exe_path, " - tipi.build CUTE_ext command line options");
 
-        listener_arg          = args_.get<std::string>("listener", "modern");
-        listener_out          = args_.get<std::string>("output", "cout");
-        force_cli_listener    = args_.get<bool>("force-listener", false);   
-        
-        filter_unit_value     = args_.get<std::string>("filter", "");
-        filter_suite_value    = args_.get<std::string>("filter-suite", "");
-        
-        parallel_strands_arg  = args_.get<size_t>("j", std::thread::hardware_concurrency() + 1);
-        parallel_run          = args_.get<bool>("parallel", false);
-        run_explicit          = args_.get<bool>("run", false);
-        
-        list_testcases        = args_.get<bool>("list-testcases") || args_.get<bool>("ltc");
-        show_help             = args_.get<bool>("help", false) || args_.get<bool>("h", false) || args_.get<bool>("?", false);
-        skipped_as_pass       = args_.get<bool>("skipped-as-pass", false);      
+        options.add_options()
+          ("listener", "",              cxxopts::value<std::string>(listener_arg)->default_value("modern"))
+          ("output", "",                cxxopts::value<std::string>(listener_out)->default_value("cout"))
+          ("force-listener", "",        cxxopts::value<bool>(force_cli_listener)->default_value("false"))
+          ("filter", "",                cxxopts::value<std::string>(filter_unit_value)->default_value(""))
+          ("filter-suite", "",          cxxopts::value<std::string>(filter_suite_value)->default_value(""))
+          ("j", "",                     cxxopts::value<size_t>(parallel_strands_arg)->default_value(std::to_string(std::thread::hardware_concurrency() + 1)))
+          ("parallel", "",              cxxopts::value<bool>(parallel_run)->default_value("false"))
+          ("run", "",                   cxxopts::value<bool>(run_explicit)->default_value("false"))
+          ("list-testcases", "",        cxxopts::value<bool>(list_testcases)->default_value("false"))
+          ("skipped-as-pass", "",       cxxopts::value<bool>(skipped_as_pass)->default_value("false"))
+          ("parallel-suite", "",        cxxopts::value<std::string>(auto_concurrent_suite)->default_value(""))
+          ("parallel-unit", "",         cxxopts::value<std::string>(auto_concurrent_unit)->default_value(""))
+          ("h,help", "Print usage",     cxxopts::value<bool>(show_help)->default_value("false"))
+        ;
 
-        parallel_child_run    = args_.get<bool>("parallel-suite", false) || args_.get<bool>("parallel-unit", false);
-        auto_concurrent_suite = args_.get<std::string>("parallel-suite", "");
-        auto_concurrent_unit  = args_.get<std::string>("parallel-unit", "");
+        cxxopts::ParseResult result;
+
+        try {
+          result = options.parse(argc, argv);
+        }
+        catch(cxxopts::exceptions::exception cli_err) {
+          std::stringstream ss{};
+          ss << "aborting - failed to parse command line options: " << cli_err.what() << std::endl;
+          throw std::runtime_error(ss.str());
+        }
+
+        parallel_child_run    = result["parallel-unit"].count() > 0 || result["parallel-suite"].count() > 0;
 
         if(listener_out == "cout" || listener_out == "console") {
           out_stream_ = &std::cout;
@@ -177,7 +189,7 @@ namespace tipi::cute_ext {
         }
         else {
           auto nowTs = std::to_string(std::time(nullptr));
-          auto execPath = std::filesystem::path(program_exe_path);
+          auto execPath = boost::filesystem::path(program_exe_path);
 
 
           std::map<std::string, std::string> placeholders_replacements = {
@@ -185,19 +197,18 @@ namespace tipi::cute_ext {
             { "{timestamp}", nowTs }
           };
 
-          for(const auto& [search, replace] : placeholders_replacements) {
-
-            size_t findIx = listener_out.find(search);
+          for(const auto& entry : placeholders_replacements) {
+            size_t findIx = listener_out.find(entry.first);
 
             if(findIx != std::string::npos) {
-              listener_out.replace(findIx, search.length(), replace);
+              listener_out.replace(findIx, entry.first.length(), entry.second);
             }
           }
 
-          std::filesystem::path output_path{listener_out};
-          std::filesystem::create_directories(std::filesystem::absolute(output_path).parent_path());
+          boost::filesystem::path output_path{listener_out};
+          boost::filesystem::create_directories(boost::filesystem::absolute(output_path).parent_path());
 
-          file_out_ptr_ = std::make_shared<std::fstream>(output_path, std::ios::out | std::ios::trunc | std::ios::in | std::ios::binary);
+          file_out_ptr_ = std::make_shared<std::fstream>(output_path.generic_string(), std::ios::out | std::ios::trunc | std::ios::in | std::ios::binary);
 
           if (!file_out_ptr_->is_open()) {
             throw std::runtime_error("Failed to open file "s + output_path.generic_string() + " for writing");
@@ -256,13 +267,13 @@ namespace tipi::cute_ext {
     detail::wrapper_options<app_listener_T> opt;    
 
     /// @brief used to communicate the test case exit reason (pass: 0 / fail: 1 / error: 2)  in autoparallel child mode
-    std::optional<int> force_destructor_exit_code;
+    stdx::optional<int> force_destructor_exit_code;
 
     /// @brief all test suites registered (could be just one depending on the run mode)
     std::unordered_map<std::string, std::shared_ptr<ext_suite>> all_suites_{};
 
-    std::atomic<size_t> test_exec_failures = 0;
-    std::atomic<size_t> test_exec_errors = 0;
+    util::copyable_atomic<size_t> test_exec_failures{0};
+    util::copyable_atomic<size_t> test_exec_errors{0};
 
     
     /// @brief callback used to customize autoparallel process start parameters and environment prior to launching child processes
@@ -298,7 +309,7 @@ namespace tipi::cute_ext {
           << opt.program_exe_path << " - usage\n" 
           << "\n"
           << "  --listener                  Choose the CUTE listener/formatter used\n"
-          << "                              valid options are: 'ide', 'xml', 'classic', 'modern' (default)\n"
+          << "                              valid options are: 'ide', 'xml', 'classic', 'modern' (default), 'modernxml'\n"
           << "\n"
           << "  --output                    Output stream to use\n"
           << "                              valid options are:\n"
@@ -308,7 +319,7 @@ namespace tipi::cute_ext {
           << "                               - 'cerr': alias of 'error'\n"
           << "                               - <file-path>: write to file (truncates previously existing content!)\n"
           << "\n"
-          << "  --list-testcases,-ltc       List the registered test cases\n"
+          << "  --list-testcases,--ltc      List the registered test cases\n"
           << "\n"
           << "  --filter=<search>           Filter test cases by name - <search> is intepreted as regex in search\n"
           << "                              mode (partial hit is filter match)\n"
@@ -321,9 +332,9 @@ namespace tipi::cute_ext {
           << "  --parallel                  Parallelize the execution of the test cases using as many high concurrency\n"
           << "                              as the executing machine allows (n_hw_threads + 1)\n"
           << "\n"
-          << "  -j=<N>                      Override the concurrency level for --parallel mode\n"
+          << "  -j<N>                       Override the concurrency level for --parallel mode\n"
           << "\n"
-          << "  --help,-h,-?                Print this help\n"
+          << "  --help,-h                   Print this help\n"
           << std::endl;
     }
 
@@ -332,10 +343,10 @@ namespace tipi::cute_ext {
 
       auto& out = opt.get_output();
 
-      for(const auto &[suite_info, suite_ptr] : all_suites_) {
-        out << "Suite: '" << suite_info << "'\n";
+      for(const auto &entry : all_suites_) {
+        out << "Suite: '" << entry.first << "'\n";
 
-        for(const auto &test_case : *suite_ptr) {
+        for(const auto &test_case : *entry.second) {
           out << " + " << test_case.name() << "\n";
         }
 
@@ -396,14 +407,14 @@ namespace tipi::cute_ext {
 
       tipi::cute_ext::detail::run_unit_result get_run_unit_result() const {
         auto rc = return_code();
-        if(rc.has_value()) {
+        if(rc) {
           return detail::ret_to_run_unit_result(rc.value());
         }
 
         return tipi::cute_ext::detail::run_unit_result::unknown;
       }
 
-      std::optional<int> return_code() const {
+      stdx::optional<int> return_code() const {
         return process_exit_code;
       }
     
@@ -481,7 +492,7 @@ namespace tipi::cute_ext {
       }
 
       // this struct gets emplaced - std::atomic<> is not copy/move-able
-      util::copyable_atomic<bool> started_ = false;
+      util::copyable_atomic<bool> started_{false};
 
       bool running_ = false;
       bool done_    = false;
@@ -494,7 +505,7 @@ namespace tipi::cute_ext {
       
       std::shared_ptr<std::stringstream> out_ss_ptr_;
       std::shared_ptr<TinyProcessLib::Process> process_ptr;
-      std::optional<int> process_exit_code{};
+      stdx::optional<int> process_exit_code{};
 
       std::shared_ptr<std::thread> process_thread_ptr;
 
@@ -531,7 +542,9 @@ namespace tipi::cute_ext {
       // collect all the tests
       std::vector<autoparallel_testcase> tasks{};
 
-      for(const auto &[suite_name, suite] : all_suites_) {
+      for(const auto &entry : all_suites_) {
+        const std::string& suite_name = entry.first;
+        const auto suite = entry.second;
         
         // respect --filter-suite
         if(filter_suite_enabled(suite_name) == false) {
@@ -548,7 +561,7 @@ namespace tipi::cute_ext {
       }
 
       /** HEPLPERS for the actual processing below */
-      std::atomic<bool> linear_mode = false;
+      std::atomic<bool> linear_mode{false};
       std::string linear_mode_suite_name{};
       
       auto next_task_it = [&]() {        
@@ -627,8 +640,8 @@ namespace tipi::cute_ext {
         }        
       };
 
-      std::atomic<size_t> tests_failed = 0;
-      std::atomic<size_t> tests_running = 0;
+      std::atomic<size_t> tests_failed{0};
+      std::atomic<size_t> tests_running{0};
       
       // we do a two stage status tracking here so we can be
       // sure we don't mix up the suite printing over linear <=> parallel
@@ -641,7 +654,15 @@ namespace tipi::cute_ext {
         return std::find(suites_printed.begin(), suites_printed.end(), suite_name) != suites_printed.end();
       };
 
-      size_t cnt_suites_to_print = std::count_if(all_suites_.begin(), all_suites_.end(), [&](const auto& s) { return filter_suite_enabled(s.first); });
+      
+      auto suite_has_tests = [&](const std::string& suite) {
+        size_t count_tests  = std::count_if(tasks.begin(), tasks.end(), [&](auto &t) { return t.get_suite_name() == suite; });
+        return count_tests > 0;
+      };
+
+      size_t cnt_suites_to_print = std::count_if(all_suites_.begin(), all_suites_.end(), [&](const auto& s) { 
+        return filter_suite_enabled(s.first) && suite_has_tests(s.first); 
+      });
 
       auto all_suites_printed = [&]() {
         return suites_printed.size() == cnt_suites_to_print;
@@ -676,12 +697,13 @@ namespace tipi::cute_ext {
         return count_tests == count_done;
       };
 
-
       auto print_finished_suites = [&]() {
         // collect the results until all tasks of a suite are finished
-        for(const auto &[suite_name, suite_ptr] : all_suites_) {
+        for(const auto &entry : all_suites_) {
+          const auto& suite_name = entry.first;
+          const auto& suite_ptr = entry.second;
 
-          if(!filter_suite_enabled(suite_name)) {
+          if(!filter_suite_enabled(suite_name) || !suite_has_tests(suite_name)) {
             continue;
           }
 
@@ -826,7 +848,7 @@ namespace tipi::cute_ext {
       return tests_failed == 0;
     }
 
-    bool cmd_run_base(std::optional<std::string> suite_to_run = std::nullopt) {
+    bool cmd_run_base(stdx::optional<std::string> suite_to_run = std::experimental::nullopt) {
       bool success = true;
 
       try {
@@ -837,7 +859,7 @@ namespace tipi::cute_ext {
         success = false;
       }
 
-      if(!success && !force_destructor_exit_code.has_value()) {
+      if(!success && !force_destructor_exit_code) {
         force_destructor_exit_code = 1;
       }
 
@@ -882,12 +904,12 @@ namespace tipi::cute_ext {
         opt.get_output() << std::flush;
       }
       
-      if(force_destructor_exit_code.has_value()) {
+      if(force_destructor_exit_code) {
         std::exit(force_destructor_exit_code.value());
       }
     }
 
-    bool process_cmd(std::optional<std::string> suite_to_run = std::nullopt) {      
+    bool process_cmd(stdx::optional<std::string> suite_to_run = std::experimental::nullopt) {      
 
       if(opt.show_help) {
         print_help();
@@ -995,9 +1017,9 @@ namespace tipi::cute_ext {
       register_suite(std::make_shared<ext_suite>(suite, run_setting, force_linear), name); 
     }  
 
-    std::atomic<bool> first_run = true;
+    util::copyable_atomic<bool> first_run{true};
   
-    bool run_suites(std::optional<std::string> suite_to_run = std::nullopt) {
+    bool run_suites(stdx::optional<std::string> suite_to_run = std::experimental::nullopt) {
 
       ext_listener& listener = opt.get_listener();
 
@@ -1066,9 +1088,11 @@ namespace tipi::cute_ext {
 
       bool result = true;
 
-      for(const auto &[suite_name, suite_ptr] : all_suites_) {
+      for(const auto &entry : all_suites_) {      
+        const auto& suite_name = entry.first;
+        const auto& suite_ptr = entry.second;
 
-        if(filter_suite_enabled(suite_name) && (suite_to_run.has_value() && suite_name == suite_to_run.value())) {
+        if(filter_suite_enabled(suite_name) && (suite_to_run && suite_name == suite_to_run.value())) {
 
           const auto &suite = *suite_ptr;
 
@@ -1115,16 +1139,17 @@ namespace tipi::cute_ext {
   /// @param argv 
   /// @param exit_on_destruction 
   /// @return 
-  template <typename RunnerListener = cute::null_listener>
+  template <typename RunnerListener = ::cute::null_listener>
   inline wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true) {
-    return wrapper(listener, argc, argv, exit_on_destruction);
+    return wrapper<RunnerListener>(listener, argc, argv, exit_on_destruction);
   }
 
 }
 
 namespace cute {
-  template <typename RunnerListener = cute::null_listener>
+  template <typename RunnerListener = ::cute::null_listener>
   inline tipi::cute_ext::wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true) {
-    return tipi::cute_ext::wrapper(listener, argc, argv, exit_on_destruction);
+    return tipi::cute_ext::wrapper<RunnerListener>(listener, argc, argv, exit_on_destruction);
   }
+}
 }

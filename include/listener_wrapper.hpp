@@ -4,7 +4,9 @@
 #include "ext_listener.hpp"
 #include "util.hpp"
 
-namespace tipi::cute_ext
+namespace tipi
+{
+namespace cute_ext
 {
   using namespace std::string_literals;
 
@@ -240,4 +242,5 @@ namespace tipi::cute_ext
     }
   };
 
+}
 }

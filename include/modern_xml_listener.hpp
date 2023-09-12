@@ -11,7 +11,9 @@
 
 #include "parallel_listener.hpp"
 
-namespace tipi::cute_ext
+namespace tipi
+{
+namespace cute_ext
 {
   using namespace std::string_literals;
 
@@ -76,8 +78,8 @@ namespace tipi::cute_ext
       if(this->render_listener_info) {
         double total_time_ms = 0;
 
-        for(auto &[test, test_ptr] : this->tests) {
-          total_time_ms += test_ptr->get_test_duration().count();         
+        for(auto &entry : this->tests) {
+          total_time_ms += entry.second->get_test_duration().count();         
         }
 
         auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);      
@@ -113,7 +115,7 @@ namespace tipi::cute_ext
             << "name=\"" << mask_xml_chars(suite_ptr->name) << "\" "
             << "tests=\"" << suite_ptr->count_expected << "\"";
 
-        if(suite_ptr->end.has_value()) {
+        if(suite_ptr->end) {
           sot << " "
               << "errors=\"" << suite_ptr->count_errors << "\" "
               << "failures=\"" << suite_ptr->count_failures << "\"";
@@ -252,4 +254,5 @@ namespace tipi::cute_ext
   };
 
 
+}
 }
