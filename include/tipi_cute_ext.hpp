@@ -641,8 +641,10 @@ namespace tipi::cute_ext {
         return std::find(suites_printed.begin(), suites_printed.end(), suite_name) != suites_printed.end();
       };
 
+      size_t cnt_suites_to_print = std::count_if(all_suites_.begin(), all_suites_.end(), [&](const auto& s) { return filter_suite_enabled(s.first); });
+
       auto all_suites_printed = [&]() {
-        return suites_printed.size() == all_suites_.size();
+        return suites_printed.size() == cnt_suites_to_print;
       };
 
       auto print_suite = [&](const auto& suite, const std::string& suite_name) {
@@ -678,6 +680,10 @@ namespace tipi::cute_ext {
       auto print_finished_suites = [&]() {
         // collect the results until all tasks of a suite are finished
         for(const auto &[suite_name, suite_ptr] : all_suites_) {
+
+          if(!filter_suite_enabled(suite_name)) {
+            continue;
+          }
 
           if(suite_finished(suite_name) && !was_suite_printed(suite_name)) {
             print_suite(*suite_ptr, suite_name);
