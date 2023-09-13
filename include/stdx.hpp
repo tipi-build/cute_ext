@@ -1,13 +1,9 @@
 #pragma once
 
-#if __cplusplus >= 201703L
-#define USE_STD17
-#endif
-
 /**
  * std::optional to stdx::optional fallback
 */
-#if __has_include(<optional>) && defined(USE_STD17)
+#if __has_include(<optional>) && __cplusplus >= 201703L
 
 #   include <optional>
 namespace stdx {
