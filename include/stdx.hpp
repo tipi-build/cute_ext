@@ -1,5 +1,9 @@
 #pragma once
 
+#if __cplusplus >= 201703L
+#define USE_STD17
+#endif
+
 /**
  * std::optional to stdx::optional fallback
 */
