@@ -7,7 +7,7 @@
 /**
  * std::optional to stdx::optional fallback
 */
-#if __has_include(<optional>) && USE_STD17
+#if __has_include(<optional>) && defined(USE_STD17)
 
 #   include <optional>
 namespace stdx {
