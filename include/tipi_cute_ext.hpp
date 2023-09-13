@@ -1145,11 +1145,11 @@ namespace cute_ext {
   }
 
 }
+}
 
-namespace cute {
-  template <typename RunnerListener = ::cute::null_listener>
-  inline tipi::cute_ext::wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true) {
-    return tipi::cute_ext::wrapper<RunnerListener>(listener, argc, argv, exit_on_destruction);
+  namespace cute {
+    template <typename RunnerListener = ::cute::null_listener>
+    inline tipi::cute_ext::wrapper<RunnerListener> makeRunner(RunnerListener& listener, int argc, const char **argv, bool exit_on_destruction = true) {
+      return tipi::cute_ext::wrapper<RunnerListener>(listener, argc, argv, exit_on_destruction);
+    }
   }
-}
-}
