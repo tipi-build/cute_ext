@@ -6,7 +6,6 @@
 #include <iostream>
 #include <map>
 #include <sstream>
-#include <optional>
 #include <atomic>
 #include <vector>
 #include <mutex>
@@ -16,7 +15,8 @@
 #include "parallel_listener.hpp"
 #include "util.hpp"
 
-namespace tipi::cute_ext
+namespace tipi {
+namespace cute_ext
 {
   struct modern_listener : public parallel_listener
   {
@@ -62,8 +62,8 @@ namespace tipi::cute_ext
       if(this->render_listener_info) {
         double total_time_ms = 0;
 
-        for(auto &[test, test_ptr] : this->tests) {
-          total_time_ms += test_ptr->get_test_duration().count();         
+        for(auto &entry : this->tests) {
+          total_time_ms += entry.second->get_test_duration().count();         
         }
 
         auto user_total_time_ms = std::chrono::duration_cast<std::chrono::duration<double>>(this->listener_end.value_or(std::chrono::steady_clock::now()) - this->listener_start);
@@ -247,4 +247,5 @@ namespace tipi::cute_ext
     }
   };
 
+}
 }

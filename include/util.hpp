@@ -20,7 +20,11 @@ extern "C" char **environ;
 #endif
 
 
-namespace tipi::cute_ext::util
+namespace tipi 
+{
+namespace cute_ext
+{
+namespace util
 {
   using namespace std::string_literals;
 
@@ -305,4 +309,7 @@ namespace tipi::cute_ext::util
     return result;
   }
 
+}
+
+}
 }

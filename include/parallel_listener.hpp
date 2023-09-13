@@ -6,7 +6,6 @@
 #include <iostream>
 #include <map>
 #include <sstream>
-#include <optional>
 #include <atomic>
 #include <vector>
 #include <mutex>
@@ -15,9 +14,13 @@
 #include <original/CUTE/cute/cute.h>
 
 #include "ext_listener.hpp"
+#include "stdx.hpp"
 
-namespace tipi::cute_ext
+namespace tipi
 {
+namespace cute_ext
+{
+
   using namespace std::string_literals;
 
   enum test_run_outcome {
@@ -32,13 +35,13 @@ namespace tipi::cute_ext
   struct test_run {
     std::string name;
     std::chrono::steady_clock::time_point start;
-    std::optional<std::chrono::steady_clock::time_point> end;
+    stdx::optional<std::chrono::steady_clock::time_point> end;
     test_run_outcome outcome;
     std::shared_ptr<tipi::cute_ext::suite_run> suite_run;
     std::stringstream out{};
     std::stringstream info{};
 
-    std::atomic<bool> marked_done = false;
+    std::atomic<bool> marked_done{false};
 
     test_run(std::string name, std::shared_ptr<tipi::cute_ext::suite_run> suite_ptr)
       : name(name)
@@ -63,14 +66,14 @@ namespace tipi::cute_ext
   struct suite_run {
     std::string name;
     std::chrono::steady_clock::time_point start;
-    std::optional<std::chrono::steady_clock::time_point> end;
+    stdx::optional<std::chrono::steady_clock::time_point> end;
 
-    std::atomic<size_t> count_expected = 0;
-    std::atomic<size_t> count_failures = 0;
-    std::atomic<size_t> count_errors = 0;
-    std::atomic<size_t> count_success = 0;
+    std::atomic<size_t> count_expected{0};
+    std::atomic<size_t> count_failures{0};
+    std::atomic<size_t> count_errors{0};
+    std::atomic<size_t> count_success{0};
 
-    std::atomic<bool> marked_done = false;
+    std::atomic<bool> marked_done{false};
 
     std::vector<std::shared_ptr<test_run>> tests{};
     std::stringstream out{};
@@ -172,11 +175,11 @@ namespace tipi::cute_ext
     std::shared_ptr<suite_run> current_suite_;
     std::shared_ptr<test_run> current_test_;
 
-    std::atomic<size_t> suite_failures = 0;
-    std::atomic<size_t> suite_success = 0;
+    std::atomic<size_t> suite_failures{0};
+    std::atomic<size_t> suite_success{0};
 
     std::chrono::steady_clock::time_point listener_start;
-    std::optional<std::chrono::steady_clock::time_point> listener_end;
+    stdx::optional<std::chrono::steady_clock::time_point> listener_end;
 
 
     // one mutex per lockable output stream
@@ -321,5 +324,7 @@ namespace tipi::cute_ext
     virtual void parallel_render_suite_footer(std::ostream &sot, const std::shared_ptr<suite_run> &suite_ptr) = 0;
     
   };
+
+}
 
 }
