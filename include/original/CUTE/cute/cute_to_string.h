@@ -85,7 +85,7 @@ namespace cute {
 namespace cute_to_string {
 		template <typename T>
 		std::ostream &to_stream(std::ostream &os,T const &t); // recursion needs forward
-#ifdef USE_STD17
+#if __cplusplus >= 201703L
 		inline std::ostream &to_stream(std::ostream &os,std::byte t); // recursion needs forward
 #endif
 
@@ -248,7 +248,7 @@ namespace cute_to_string {
 			select_built_in_shift_if<T,cute_to_string::is_output_streamable<T>::value > out(os);
 			return out(t);
 		}
-#ifdef USE_STD17
+#if __cplusplus >= 201703L
 		inline std::ostream &to_stream(std::ostream &os,std::byte b){
 			return os << "0x" << hexit(static_cast<std::underlying_type_t<std::byte>>(b));
 		}
