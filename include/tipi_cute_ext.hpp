@@ -848,7 +848,7 @@ namespace cute_ext {
       return tests_failed == 0;
     }
 
-    bool cmd_run_base(stdx::optional<std::string> suite_to_run = std::experimental::nullopt) {
+    bool cmd_run_base(stdx::optional<std::string> suite_to_run = stdx::nullopt) {
       bool success = true;
 
       try {
@@ -909,7 +909,7 @@ namespace cute_ext {
       }
     }
 
-    bool process_cmd(stdx::optional<std::string> suite_to_run = std::experimental::nullopt) {      
+    bool process_cmd(stdx::optional<std::string> suite_to_run = stdx::nullopt) {      
 
       if(opt.show_help) {
         print_help();
@@ -1019,7 +1019,7 @@ namespace cute_ext {
 
     util::copyable_atomic<bool> first_run{true};
   
-    bool run_suites(stdx::optional<std::string> suite_to_run = std::experimental::nullopt) {
+    bool run_suites(stdx::optional<std::string> suite_to_run = stdx::nullopt) {
 
       ext_listener& listener = opt.get_listener();
 
