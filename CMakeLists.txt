@@ -92,7 +92,9 @@ set(CUTE_EXT_INCLUDE_INSTALL_DESTINATION_DIR "include/cute_ext")
 set(CUTE_EXT_CMAKE_TARGETS_DESTINATION_DIR "lib/cmake/cute_ext")
 
 target_include_directories(cute_ext INTERFACE 
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include/cute>             # for cute::cute emulation
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+  $<INSTALL_INTERFACE:${CUTE_EXT_INCLUDE_INSTALL_DESTINATION_DIR}/cute> # for cute::cute emulation
   $<INSTALL_INTERFACE:${CUTE_EXT_INCLUDE_INSTALL_DESTINATION_DIR}>
 )
 
