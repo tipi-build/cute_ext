@@ -9,7 +9,7 @@ function(add_cute_ext_test test_name source_files)
     add_test(
         NAME ${test_name} 
         COMMAND "$<TARGET_FILE:${test_name}>"
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}   # wd = project binary dir root so we can find goldilock exe    
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}   # wd = project binary dir root so we can find the executables built in cute_ext more easily
     )
 
 endfunction()

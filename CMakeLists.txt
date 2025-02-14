@@ -14,15 +14,7 @@ if(NOT DEFINED FETCHCONTENT_QUIET)
   set(FETCHCONTENT_QUIET OFF)
 endif()
 
-if(CMAKE_SOURCE_DIR STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-  set(project_standalone ON)
-else()
-  set(project_standalone OFF)
-endif()
-
-option(CUTE_EXT_BUILD_TESTING "set ON to build library tests" ${project_standalone})
 option(CUTE_EXT_FETCHCONTENT_DEPENDENCIES "set ON FetchContent Cute_ext's dependencies" OFF)
-
 
 #
 # Dependencies
