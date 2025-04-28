@@ -183,8 +183,8 @@ namespace cute_to_string {
 		std::ostream &print_tuple(std::ostream &os, std::tuple<Types...> const &t, size<_> const s) {
 			return print_tuple(os, t, s, index_sequence_for<Types...>{});
 		}
-		template<typename ..._>
-		std::ostream &print_tuple(std::ostream &os, std::tuple<_...> const &t, size<1> const){
+		template<typename T>
+		std::ostream &print_tuple(std::ostream &os, std::tuple<T> const &t, size<1> const) {
 			return os << '\n', cute_to_string::to_stream(os, std::get<0>(t));
 		}
 		template<typename ..._>
